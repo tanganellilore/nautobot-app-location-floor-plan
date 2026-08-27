@@ -17,7 +17,7 @@ There is no `RackMap` model. Rack occupancy is derived live from Nautobot Device
 - Nautobot `>=3.2.3,<3.3` (validated against Nautobot 3.2.3).
 - Django 5.2.17 as provided by Nautobot 3.2.3.
 - Python `>=3.10,<3.15` (3.10, 3.11, 3.12, 3.13, and 3.14).
-- Package name: `location-floor-plan`; Python package/app config: `location_floor_plan`.
+- Package name: `nautobot-location-floor-plan`; Python package/app config: `location_floor_plan`.
 - Generated from the official `cookiecutter-nautobot-app` tag `nautobot-app-v3.1.4`.
 - Front end uses Leaflet 1.9.4 and Geoman Free 2.20.0.
 
@@ -26,13 +26,13 @@ There is no `RackMap` model. Rack occupancy is derived live from Nautobot Device
 ### Install with Poetry
 
 ```bash
-poetry add location-floor-plan
+poetry add nautobot-location-floor-plan
 ```
 
 ### Install with pip
 
 ```bash
-pip install location-floor-plan
+pip install nautobot-location-floor-plan
 ```
 
 ### Enable the app in Nautobot

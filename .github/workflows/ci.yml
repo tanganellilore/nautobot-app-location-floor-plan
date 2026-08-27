@@ -11,7 +11,7 @@ on: # yamllint disable-line rule:truthy rule:comments
   pull_request: ~
 
 env:
-  APP_NAME: "location-floor-plan"
+  APP_NAME: "nautobot-location-floor-plan"
 
 jobs:
   generate-lockfile:

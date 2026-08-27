@@ -1,7 +1,7 @@
 # Upgrade
 
 ```bash
-pip install --upgrade location-floor-plan
+pip install --upgrade nautobot-location-floor-plan
 nautobot-server migrate location_floor_plan
 nautobot-server post_upgrade
 nautobot-server collectstatic --no-input

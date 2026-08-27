@@ -1,13 +1,13 @@
 [tool.poetry]
-name = "location-floor-plan"
-version = "0.1.0a0"
+name = "nautobot-location-floor-plan"
+version = "0.1.0"
 description = "Interactive physical hierarchy maps for Nautobot Locations and Racks"
-authors = ["Location Floor Plan Contributors <maintainers@example.com>"]
+authors = ["Lorenzo Tanganelli <lorenzo.tanganelli@staff.aruba.it>"]
 license = "Apache-2.0"
 readme = "README.md"
-homepage = "https://github.com/location-floor-plan/nautobot-app-location-floor-plan"
-repository = "https://github.com/location-floor-plan/nautobot-app-location-floor-plan"
-documentation = "https://docs.nautobot.com/projects/location-floor-plan/en/latest/"
+homepage = "https://github.com/tanganellilore/nautobot-app-location-floor-plan"
+repository = "https://github.com/tanganellilore/nautobot-app-location-floor-plan"
+documentation = "https://github.com/tanganellilore/nautobot-app-location-floor-plan#readme"
 keywords = ["nautobot", "nautobot-app", "nautobot-plugin"]
 classifiers = [
     "Intended Audience :: Developers",

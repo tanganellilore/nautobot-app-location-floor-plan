@@ -9,13 +9,13 @@
 ## Install
 
 ```bash
-poetry add location-floor-plan
+poetry add nautobot-location-floor-plan
 ```
 
 or:
 
 ```bash
-pip install location-floor-plan
+pip install nautobot-location-floor-plan
 ```
 
 Enable the app in `nautobot_config.py`:

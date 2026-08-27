@@ -20,5 +20,5 @@ Remove the configuration you added in `nautobot_config.py` from `PLUGINS` & `PLU
 ## Uninstall the package
 
 ```bash
-$ pip3 uninstall location-floor-plan
+$ pip3 uninstall nautobot-location-floor-plan
 ```
