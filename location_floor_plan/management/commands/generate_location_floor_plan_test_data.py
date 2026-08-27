@@ -20,10 +20,10 @@ LOCATION_TREE = (
     ("IT1", "Site", "Italy"),
     ("DCA", "Datacenter", "IT1"),
     ("DATA01", "Area", "DCA"),
-    ("CAGE01", "Cage", "DH01"),
-    ("CAGE02", "Cage", "DH01"),
+    ("CAGE01", "Cage", "DATA01"),
+    ("CAGE02", "Cage", "DATA01"),
     ("ROOM01", "Area", "DCA"),
-    ("ROOM01", "Area", "DCA"),
+    ("ROOM02", "Area", "DCA"),
 )
 
 DEVICE_ROLES = (
@@ -40,14 +40,13 @@ DEVICE_TYPES = (
 )
 
 RACK_NAMES = tuple(f"{prefix}{number:02d}" for prefix in ("A", "B") for number in range(1, 6))
-DIRECT_RACK_LOCATION_NAMES = ("ETRA", "ETRB")
-DH01_CAGE_NAMES = ("CAGEA", "CAGEB")
-RACK_LOCATION_NAMES = DH01_CAGE_NAMES + DIRECT_RACK_LOCATION_NAMES
-LEGACY_DATA_CENTER_NAMES = ("DC1", "DC2")
+DIRECT_RACK_LOCATION_NAMES = ("ROOM01", "ROOM02")
+CAGE_NAMES = ("CAGE01", "CAGE02")
+RACK_LOCATION_NAMES = CAGE_NAMES + DIRECT_RACK_LOCATION_NAMES
 SITE_NAME = "IT1"
 DATACENTER_NAME = "DCA"
 DEVICE_POSITIONS = (1, 3, 5, 7, 9)
-CAGE_PARENT_BY_NAME = {cage_name: "DH01" for cage_name in DH01_CAGE_NAMES}
+CAGE_PARENT_BY_NAME = {cage_name: "DATA01" for cage_name in CAGE_NAMES}
 
 
 def _device_count_for_rack(data_center_index, rack_index):
@@ -74,21 +73,6 @@ def _device_name(role_name, serial):
 def _device_serial(rack_location_index, rack_index, slot):
     """Return a stable generated device serial number."""
     return rack_location_index * 100 + rack_index * 10 + slot
-
-
-def _legacy_dotted_device_name(rack_location_name, rack_name, slot):
-    """Return the previous dotted path-style demo device name for cleanup."""
-    return f"{SITE_NAME}.{DATACENTER_NAME}.{rack_location_name}.{rack_name}.DEV{slot:02d}"
-
-
-def _legacy_rack_location_device_name(rack_location_name, rack_name, slot):
-    """Return the previous rack-location-based demo device name for cleanup."""
-    return f"{rack_location_name}-{rack_name}-DEV{slot:02d}"
-
-
-def _legacy_device_name(data_center_name, rack_name, rack_index):
-    """Return the previous one-device-per-rack demo name for cleanup."""
-    return f"{data_center_name}-{rack_name}-{rack_index:02d}"
 
 
 class Command(BaseCommand):
@@ -270,28 +254,10 @@ class Command(BaseCommand):
                 for rack_index, _rack in enumerate(RACK_NAMES, start=1)
                 for slot in range(1, _device_count_for_rack(rack_location_index, rack_index) + 1)
             ]
-            + [
-                _legacy_dotted_device_name(rack_location, rack, slot)
-                for rack_location_index, rack_location in enumerate(RACK_LOCATION_NAMES + ("DH01",))
-                for rack_index, rack in enumerate(RACK_NAMES, start=1)
-                for slot in range(1, _device_count_for_rack(rack_location_index, rack_index) + 1)
-            ]
-            + [
-                _legacy_rack_location_device_name(rack_location, rack, slot)
-                for rack_location_index, rack_location in enumerate(RACK_LOCATION_NAMES + ("DH01",))
-                for rack_index, rack in enumerate(RACK_NAMES, start=1)
-                for slot in range(1, _device_count_for_rack(rack_location_index, rack_index) + 1)
-            ]
-            + [
-                _legacy_device_name(data_center, rack, rack_index)
-                for data_center in LEGACY_DATA_CENTER_NAMES
-                for rack_index, rack in enumerate(RACK_NAMES, start=1)
-            ]
         ).delete()
         Rack.objects.using(db).filter(
-            name__in=[_rack_name(rack_location, rack) for rack_location in RACK_LOCATION_NAMES for rack in RACK_NAMES]
-            + list(RACK_NAMES),
-            location__name__in=RACK_LOCATION_NAMES + ("DH01",) + LEGACY_DATA_CENTER_NAMES,
+            name__in=[_rack_name(rack_location, rack) for rack_location in RACK_LOCATION_NAMES for rack in RACK_NAMES],
+            location__name__in=RACK_LOCATION_NAMES,
         ).delete()
 
         for name, _, _ in reversed(LOCATION_TREE):
