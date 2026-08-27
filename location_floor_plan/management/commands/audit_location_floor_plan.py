@@ -10,7 +10,9 @@ from location_floor_plan.models import LocationPlacement, RackPlacement, _is_des
 class Command(BaseCommand):
     """Report stale Location Floor Plan placements and optionally clean them up."""
 
-    help = "Report stale Location Floor Plan placements; pass --cleanup to delete stale placements and bump map revisions."
+    help = (
+        "Report stale Location Floor Plan placements; pass --cleanup to delete stale placements and bump map revisions."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument("--cleanup", action="store_true", help="Delete stale placements transactionally.")

@@ -12,7 +12,7 @@ class FloorPlanTable(BaseTable):
     """Native Nautobot table for locations that own Location Floor Plan maps."""
 
     location = tables.TemplateColumn(
-        template_code='<a href="{% url \'plugins:location_floor_plan:location_floor_plan\' pk=record.location.pk %}">{{ record.location }}</a>',
+        template_code="<a href=\"{% url 'plugins:location_floor_plan:location_floor_plan' pk=record.location.pk %}\">{{ record.location }}</a>",
         verbose_name="Location",
         order_by="location__name",
     )

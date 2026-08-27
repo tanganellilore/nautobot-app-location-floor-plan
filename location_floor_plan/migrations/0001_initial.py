@@ -157,7 +157,9 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             "floorplan",
-            models.CheckConstraint(condition=models.Q(("logical_width__gte", 1)), name="location_floor_plan_map_width_gte_1"),
+            models.CheckConstraint(
+                condition=models.Q(("logical_width__gte", 1)), name="location_floor_plan_map_width_gte_1"
+            ),
         ),
         migrations.AddConstraint(
             "floorplan",
@@ -179,7 +181,9 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             "floorplan",
-            models.CheckConstraint(condition=models.Q(("revision__gte", 1)), name="location_floor_plan_map_revision_gte_1"),
+            models.CheckConstraint(
+                condition=models.Q(("revision__gte", 1)), name="location_floor_plan_map_revision_gte_1"
+            ),
         ),
         migrations.AddConstraint(
             "locationplacement",
@@ -197,6 +201,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             "rackplacement",
-            models.CheckConstraint(condition=models.Q(("height__gte", 1)), name="location_floor_plan_rack_height_gte_1"),
+            models.CheckConstraint(
+                condition=models.Q(("height__gte", 1)), name="location_floor_plan_rack_height_gte_1"
+            ),
         ),
     ]

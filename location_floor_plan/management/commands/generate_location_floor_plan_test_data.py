@@ -4,9 +4,8 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.management.base import BaseCommand
 from django.db import DEFAULT_DB_ALIAS
 from nautobot.dcim.choices import DeviceFaceChoices
-from nautobot.dcim.models import Device, DeviceType, Location, LocationType, Manufacturer, PowerFeed, PowerPanel, Rack
+from nautobot.dcim.models import Device, DeviceType, Location, LocationType, Manufacturer, PowerPanel, Rack
 from nautobot.extras.models import Role, Status
-
 
 LOCATION_TYPE_TREE = (
     ("Region", None),

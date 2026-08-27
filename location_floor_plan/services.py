@@ -81,9 +81,7 @@ def resolve_floor_plan(location: Location, *, user=None) -> ResolvedMap:
 
     ancestors = list(location.ancestors(include_self=False).values_list("pk", flat=True))
     ancestor_ids = list(reversed(ancestors))
-    maps = {
-        m.location_id: m for m in FloorPlan.objects.filter(location_id__in=ancestor_ids).select_related("location")
-    }
+    maps = {m.location_id: m for m in FloorPlan.objects.filter(location_id__in=ancestor_ids).select_related("location")}
     placements = {}
     for placement in LocationPlacement.objects.filter(
         location=location, floor_plan__location_id__in=ancestor_ids
@@ -350,9 +348,7 @@ def mutate_placement(
     parent_id = placement_model.objects.only("floor_plan_id").get(pk=instance.pk).floor_plan_id
     parent = FloorPlan.objects.select_for_update().get(pk=parent_id)
     obj = (
-        placement_model.objects.select_related("floor_plan")
-        .select_for_update()
-        .get(pk=instance.pk, floor_plan=parent)
+        placement_model.objects.select_related("floor_plan").select_for_update().get(pk=instance.pk, floor_plan=parent)
     )
     _check(user, "location_floor_plan.change_floorplan", parent)
     _check(user, f"location_floor_plan.{action}_{perm_base}", obj)

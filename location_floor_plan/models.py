@@ -134,8 +134,12 @@ class FloorPlan(PrimaryModel):
         verbose_name = "floor plan"
         verbose_name_plural = "floor plans"
         constraints = [
-            models.CheckConstraint(condition=models.Q(logical_width__gte=1), name="location_floor_plan_map_width_gte_1"),
-            models.CheckConstraint(condition=models.Q(logical_height__gte=1), name="location_floor_plan_map_height_gte_1"),
+            models.CheckConstraint(
+                condition=models.Q(logical_width__gte=1), name="location_floor_plan_map_width_gte_1"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(logical_height__gte=1), name="location_floor_plan_map_height_gte_1"
+            ),
             models.CheckConstraint(
                 condition=models.Q(logical_width__lte=MAX_LOGICAL_SIZE), name="location_floor_plan_map_width_lte_max"
             ),
@@ -170,7 +174,9 @@ class LocationPlacement(PrimaryModel):
         verbose_name = "location placement"
         verbose_name_plural = "location placements"
         constraints = [
-            models.UniqueConstraint(fields=["floor_plan", "location"], name="location_floor_plan_unique_location_placement")
+            models.UniqueConstraint(
+                fields=["floor_plan", "location"], name="location_floor_plan_unique_location_placement"
+            )
         ]
 
     def __str__(self):
