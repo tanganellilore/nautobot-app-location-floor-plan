@@ -18,7 +18,7 @@ class LocationFloorPlanConfig(NautobotAppConfig):
     description = "Interactive physical hierarchy maps for Nautobot Locations and Racks."
     base_url = "location-floor-plan"
     required_settings = []
-    min_version = "3.2.3"
+    min_version = "3.1.0"
     max_version = "3.3"
     default_settings = {
         "rack_utilization_warning_threshold": 80,

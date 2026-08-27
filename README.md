@@ -14,8 +14,8 @@ There is no `RackMap` model. Rack occupancy is derived live from Nautobot Device
 
 ## Prerequisites and supported versions
 
-- Nautobot `>=3.2.3,<3.3` (validated against Nautobot 3.2.3).
-- Django 5.2.17 as provided by Nautobot 3.2.3.
+- Nautobot `>=3.1.0,<3.3` (validated in CI against Nautobot 3.1.0 and stable).
+- Django as provided by the supported Nautobot version.
 - Python `>=3.10,<3.15` (3.10, 3.11, 3.12, 3.13, and 3.14).
 - Package name: `nautobot-location-floor-plan`; Python package/app config: `location_floor_plan`.
 - Generated from the official `cookiecutter-nautobot-app` tag `nautobot-app-v3.1.4`.

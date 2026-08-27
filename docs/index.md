@@ -9,4 +9,4 @@ Start with:
 - [Using the App](user/app_use_cases.md)
 - [Upgrade](admin/upgrade.md)
 
-Key facts: Nautobot `>=3.2.3,<3.3`, Django 5.2.17, Python 3.10-3.14, package `nautobot-location-floor-plan`, app package `location_floor_plan`, Leaflet 1.9.4, Geoman Free 2.20.0.
+Key facts: Nautobot `>=3.1.0,<3.3`, Python 3.10-3.14, package `nautobot-location-floor-plan`, app package `location_floor_plan`, Leaflet 1.9.4, Geoman Free 2.20.0.

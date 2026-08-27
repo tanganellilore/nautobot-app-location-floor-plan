@@ -2,8 +2,8 @@
 
 ## Requirements
 
-- Nautobot `>=3.2.3,<3.3`.
-- Django 5.2.17 from Nautobot 3.2.3.
+- Nautobot `>=3.1.0,<3.3`.
+- Django as provided by the supported Nautobot version.
 - Python `>=3.10,<3.15`.
 
 ## Install
