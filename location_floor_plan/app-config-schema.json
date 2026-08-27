@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "properties": {
+    "rack_utilization_low_threshold": {"type": "integer", "minimum": 1, "maximum": 100},
+    "rack_utilization_medium_threshold": {"type": "integer", "minimum": 1, "maximum": 100},
+    "rack_utilization_high_threshold": {"type": "integer", "minimum": 1, "maximum": 100},
+    "background_max_bytes": {"type": "integer", "minimum": 1024},
+    "background_max_pixels": {"type": "integer", "minimum": 1},
+    "background_max_dimension": {"type": "integer", "minimum": 1}
+  },
+  "additionalProperties": true
+}

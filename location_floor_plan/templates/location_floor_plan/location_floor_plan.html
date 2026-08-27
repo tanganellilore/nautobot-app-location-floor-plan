@@ -1,0 +1,148 @@
+{% extends 'generic/object_retrieve.html' %}
+{% load static %}
+{% block extra_tab_content %}
+    <div class="tab-pane active" id="location-floor-plan" role="tabpanel">
+        <div class="panel panel-default">
+            <div class="panel-heading lfp-toolbar">
+                <strong>Location Floor Plan Map</strong>
+                {% if has_edit_permission %}
+                    <div id="lfp-toolbar-view" class="lfp-toolbar-group lfp-hidden">
+                        <button id="btn-lfp-edit" class="btn btn-primary btn-sm"><i class="mdi mdi-pencil"></i> Edit Map</button>
+                    </div>
+                    <div id="lfp-toolbar-edit" class="lfp-toolbar-group lfp-hidden">
+                        <button id="btn-lfp-add-loc" class="btn btn-secondary btn-sm"><i class="mdi mdi-map-marker-plus"></i> Add Location</button>
+                        <button id="btn-lfp-add-rack" class="btn btn-secondary btn-sm"><i class="mdi mdi-server-plus"></i> Add Rack</button>
+                        <button id="btn-lfp-delete-map" class="btn btn-danger btn-sm"><i class="mdi mdi-delete"></i> Delete Map</button>
+                        <button id="btn-lfp-replace-bg" class="btn btn-secondary btn-sm"><i class="mdi mdi-image-edit"></i> Replace Background</button>
+                        <input type="file"
+                               id="lfp-replace-bg"
+                               class="lfp-hidden"
+                               accept="image/png,image/jpeg,image/svg+xml">
+                        <button id="btn-lfp-save" class="btn btn-primary btn-sm"><i class="mdi mdi-content-save"></i> Save</button>
+                        <button id="btn-lfp-cancel" class="btn btn-secondary btn-sm"><i class="mdi mdi-cancel"></i> Cancel</button>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="panel-body p-0">
+                <!-- Inherited Alert -->
+            <div id="lfp-inherited-alert" class="alert alert-info m-3 lfp-hidden" role="alert">
+                <i class="mdi mdi-information-outline"></i> Inherited map &mdash; read-only from this location. Edit it from the location that owns the map.
+            </div>
+            <!-- Loading -->
+                <div id="lfp-loading" class="text-center lfp-panel-padding">
+                    <p class="text-muted">Loading map...</p>
+                </div>
+                <!-- Error -->
+                <div id="lfp-error" class="text-center lfp-panel-padding lfp-hidden">
+                    <p id="lfp-error-message" class="text-danger"></p>
+                    <button id="btn-lfp-reload" class="btn btn-primary mt-2">Reload</button>
+                </div>
+                <!-- No map upload state -->
+                <div id="lfp-no-map" class="text-center lfp-panel-padding lfp-hidden">
+                    <p class="text-muted mb-3">No physical map exists for this location.</p>
+                    {% if has_edit_permission %}
+                        <div class="lfp-create-box text-left">
+                            <h5>Create Map</h5>
+                            <div class="form-group">
+                                <label>Logical Width</label>
+                                <input type="number" id="lfp-map-width" class="form-control" value="1000">
+                            </div>
+                            <div class="form-group">
+                                <label>Logical Height</label>
+                                <input type="number" id="lfp-map-height" class="form-control" value="1000">
+                            </div>
+                            <div class="form-group">
+                                <label>Background Image (Optional)</label>
+                                <input type="file"
+                                       id="lfp-map-bg"
+                                       class="form-control"
+                                       accept="image/png,image/jpeg,image/svg+xml">
+                            </div>
+                            <button id="btn-lfp-create-map" class="btn btn-primary mt-2">Create</button>
+                        </div>
+                    {% endif %}
+                </div>
+                <!-- Map Container -->
+                <div id="location-floor-plan-map" class="lfp-map-container lfp-hidden"></div>
+            </div>
+        </div>
+    </div>
+    <!-- Modals -->
+<div class="modal fade" id="lfp-picker-modal" tabindex="-1" aria-labelledby="lfp-picker-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="lfp-picker-title">Select Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="overflow: visible;">
+                <form id="lfp-picker-form">
+                    <div class="mb-3">
+                        <label for="id_target" id="lfp-picker-label" class="form-label fw-bold">Available Items</label>
+                        {{ placement_picker_form.target }}
+                        {% if placement_picker_form.target.help_text %}
+                            <span class="help-block">{{ placement_picker_form.target.help_text }}</span>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="lfp-picker-place" class="btn btn-primary" disabled>Place</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="lfp-alert-modal" tabindex="-1" aria-labelledby="lfp-alert-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="lfp-alert-title">Alert</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="lfp-alert-message" class="mb-0"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="lfp-confirm-modal" tabindex="-1" aria-labelledby="lfp-confirm-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="lfp-confirm-title">Confirm</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="lfp-confirm-message" class="mb-0"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="lfp-confirm-yes" class="btn btn-danger">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+    <link rel="stylesheet"
+          href="{% static 'location_floor_plan/vendor/leaflet.css' %}">
+    <link rel="stylesheet"
+          href="{% static 'location_floor_plan/vendor/leaflet-geoman.css' %}">
+    <link rel="stylesheet"
+          href="{% static 'location_floor_plan/css/location_floor_plan.css' %}">
+{% endblock %}
+{% block javascript %}
+    {{ block.super }}
+    <script src="{% static 'location_floor_plan/vendor/leaflet.js' %}"></script>
+    <script src="{% static 'location_floor_plan/vendor/leaflet-geoman.min.js' %}"></script>
+    {{ lfp_permissions|json_script:"lfp-permissions" }}
+    {{ object.id|json_script:"lfp-location-id" }}
+    {{ api_resolved_url|json_script:"lfp-api-resolved-url" }}
+    {{ api_map_list_url|json_script:"lfp-api-map-list-url" }}
+    {{ lfp_csrf_token|json_script:"lfp-csrf-token" }}
+    <script src="{% static 'location_floor_plan/js/location_floor_plan.js' %}"></script>
+{% endblock %}

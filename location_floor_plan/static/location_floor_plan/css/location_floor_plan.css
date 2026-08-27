@@ -1,0 +1,191 @@
+.lfp-map-container {
+    width: 100%;
+    height: 600px;
+    background-color: var(--bs-secondary-bg);
+    position: relative;
+    border-radius: 4px;
+}
+
+.lfp-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.lfp-toolbar-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.lfp-hidden {
+    display: none !important;
+}
+
+.lfp-panel-padding {
+    padding: 3rem;
+}
+
+.lfp-create-box {
+    background: var(--bs-secondary-bg);
+    padding: 1.5rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 4px;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+/* Rack statuses - using pattern/border/text */
+.rack-placement {
+    stroke: var(--bs-border-color);
+    stroke-width: 2;
+    fill-opacity: 0.7;
+    transition: fill-opacity 0.2s, stroke-width 0.2s;
+    cursor: pointer;
+}
+.rack-placement:hover {
+    fill-opacity: 0.9;
+    stroke: var(--bs-primary);
+    stroke-width: 3;
+}
+
+.rack-usage-critical {
+    fill: var(--bs-danger);
+    stroke: var(--bs-danger);
+    stroke-dasharray: 4;
+}
+.rack-usage-high {
+    fill: var(--bs-orange, var(--bs-warning));
+    stroke: var(--bs-orange, var(--bs-warning));
+    stroke-dasharray: 2;
+}
+.rack-usage-medium {
+    fill: var(--bs-warning);
+    stroke: var(--bs-warning);
+}
+.rack-usage-low {
+    fill: var(--bs-success);
+    stroke: var(--bs-success);
+}
+.rack-usage-empty {
+    fill: var(--bs-secondary);
+    stroke: var(--bs-secondary);
+}
+
+/* Location polygons */
+.lfp-location-poly {
+    fill: var(--bs-primary);
+    fill-opacity: 0.1;
+    stroke: var(--bs-primary);
+    stroke-width: 2;
+    stroke-dasharray: 5, 5;
+    cursor: pointer;
+    transition: fill-opacity 0.2s, stroke-width 0.2s;
+}
+.lfp-location-poly:hover {
+    fill-opacity: 0.25;
+    stroke-width: 3;
+}
+
+/* Labels */
+.lfp-label {
+    font-weight: bold;
+    text-align: center;
+    font-size: 12px;
+    color: var(--bs-body-color);
+}
+
+
+
+
+.lfp-selected-layer {
+    stroke: var(--bs-primary) !important;
+    stroke-width: 4 !important;
+    stroke-dasharray: 6, 4 !important;
+}
+
+/* Leaflet Tooltip Theme Overrides */
+.lfp-map-container .leaflet-tooltip {
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border: 1px solid var(--bs-border-color);
+    box-shadow: var(--bs-box-shadow);
+}
+
+.lfp-map-container .leaflet-tooltip-top:before {
+    border-top-color: var(--bs-body-bg);
+}
+.lfp-map-container .leaflet-tooltip-bottom:before {
+    border-bottom-color: var(--bs-body-bg);
+}
+.lfp-map-container .leaflet-tooltip-left:before {
+    border-left-color: var(--bs-body-bg);
+}
+.lfp-map-container .leaflet-tooltip-right:before {
+    border-right-color: var(--bs-body-bg);
+}
+
+
+
+
+
+
+.lfp-edit-label {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-weight: bold;
+    text-align: center;
+    font-size: 12px;
+    color: var(--bs-body-color) !important;
+    text-shadow: 1px 1px 2px var(--bs-body-bg), -1px -1px 2px var(--bs-body-bg), 1px -1px 2px var(--bs-body-bg), -1px 1px 2px var(--bs-body-bg);
+    pointer-events: none;
+}
+.lfp-edit-label::before {
+    display: none !important;
+}
+
+.lfp-action-tooltip {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    pointer-events: auto !important;
+}
+.lfp-action-tooltip::before {
+    display: none !important;
+}
+
+
+.lfp-action-panel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    padding: 6px;
+    border-radius: 12px;
+    animation: lfpPopIn 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes lfpPopIn {
+    from {
+        opacity: 0;
+        transform: scale(0.88) translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lfp-action-panel {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+}
