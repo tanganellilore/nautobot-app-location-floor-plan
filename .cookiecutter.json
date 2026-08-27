@@ -1,14 +1,14 @@
 {
     "cookiecutter": {
-        "codeowner_github_usernames": "",
+        "codeowner_github_usernames": "tanganellilore",
         "full_name": "Location Floor Plan Contributors",
-        "email": "maintainers@example.com",
+        "email": "lorenzo.tanganelli@hotmail.it",
         "github_org": "location-floor-plan",
         "app_name": "location_floor_plan",
         "verbose_name": "Location Floor Plan",
         "app_slug": "location-floor-plan",
         "project_slug": "nautobot-app-location-floor-plan",
-        "repo_url": "https://github.com/location-floor-plan/nautobot-app-location-floor-plan",
+        "repo_url": "https://github.com/tanganellilore/nautobot-app-location-floor-plan",
         "base_url": "location-floor-plan",
         "camel_name": "LocationFloorPlan",
         "project_short_description": "Interactive physical hierarchy maps for Nautobot Locations and Racks",
