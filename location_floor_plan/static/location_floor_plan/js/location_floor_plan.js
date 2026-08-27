@@ -78,6 +78,7 @@
         const label = layer && layer.options.editLabel;
         if (label && layer.getBounds) {
             label.setLatLng(layer.getBounds().getCenter());
+            label.setContent(createTooltipContent(layer.options.targetName || '', null));
         }
     }
 
@@ -117,6 +118,162 @@
         }
         contextActionLayer = null;
     }
+
+    function createTooltipActionButton({ icon, label, className = '', onClick }) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `btn btn-sm lfp-tooltip-action ${className}`.trim();
+        btn.setAttribute('aria-label', label);
+        btn.setAttribute('title', label);
+
+        const iconEl = document.createElement('i');
+        iconEl.className = `mdi ${icon}`;
+        btn.appendChild(iconEl);
+
+        btn.onclick = (e) => {
+            L.DomEvent.stopPropagation(e);
+            onClick?.(e);
+        };
+        btn.onmousedown = (e) => L.DomEvent.stopPropagation(e);
+        return btn;
+    }
+
+    function getLayerPlacementType(layer) {
+        return layer?.options?.placementType || (locationLayerGroup?.hasLayer(layer) ? 'location' : 'rack');
+    }
+
+    function getTooltipPlacement(layer, preferredDirection = 'top') {
+        if (!map || !layer || !layer.getBounds) {
+            return {
+                anchorLatLng: null,
+                direction: preferredDirection,
+                offset: preferredDirection === 'bottom' ? [0, 10] : [0, -10]
+            };
+        }
+
+        const bounds = layer.getBounds();
+        const center = bounds.getCenter();
+        const fallback = {
+            anchorLatLng: preferredDirection === 'bottom'
+                ? L.latLng(bounds.getSouth(), center.lng)
+                : L.latLng(bounds.getNorth(), center.lng),
+            direction: preferredDirection,
+            offset: preferredDirection === 'bottom' ? [0, 4] : [0, -4]
+        };
+
+        if (!map.getZoom()) {
+            return fallback;
+        }
+
+        const topPoint = map.latLngToContainerPoint(L.latLng(bounds.getNorth(), center.lng));
+        const bottomPoint = map.latLngToContainerPoint(L.latLng(bounds.getSouth(), center.lng));
+        const mapSize = map.getSize();
+        const tooltipRoom = layer.options.tooltipClearance || 52;
+        const gap = 4;
+        const topRoom = topPoint.y;
+        const bottomRoom = mapSize.y - bottomPoint.y;
+        const preferBottom = topRoom < tooltipRoom && bottomRoom > topRoom;
+        const direction = preferBottom ? 'bottom' : preferredDirection;
+        const useBottom = direction === 'bottom';
+
+        return {
+            anchorLatLng: useBottom
+                ? L.latLng(bounds.getSouth(), center.lng)
+                : L.latLng(bounds.getNorth(), center.lng),
+            direction,
+            offset: useBottom ? [0, gap] : [0, -gap]
+        };
+    }
+
+    function bindSmartTooltip(layer, content, options = {}) {
+        const placement = getTooltipPlacement(layer, options.direction || 'top');
+        if (options.permanent) {
+            return layer.bindTooltip(content, {
+                ...options,
+                direction: placement.direction,
+                offset: placement.offset
+            });
+        }
+
+        const tooltip = L.tooltip({
+            ...options,
+            direction: placement.direction,
+            offset: placement.offset
+        }).setContent(content);
+        const openTooltip = () => {
+            const hoverPlacement = getTooltipPlacement(layer, options.direction || 'top');
+            if (!hoverPlacement.anchorLatLng || !map) return;
+            tooltip.options.direction = hoverPlacement.direction;
+            tooltip.options.offset = hoverPlacement.offset;
+            tooltip.setLatLng(hoverPlacement.anchorLatLng).addTo(map);
+        };
+        const closeTooltip = () => tooltip.remove();
+        layer.on('mouseover', openTooltip);
+        layer.on('mouseout', closeTooltip);
+        return tooltip;
+    }
+
+    function openContextActionTooltip(layer, panel) {
+        const placement = getTooltipPlacement(layer, 'top');
+        if (!placement.anchorLatLng) return;
+
+        bindSmartTooltip(layer, panel, {
+            permanent: true,
+            interactive: true,
+            className: 'lfp-map-tooltip-surface lfp-action-tooltip'
+        }).openTooltip(placement.anchorLatLng);
+    }
+
+    async function getPlacementCandidates(type, activeTargetId = null) {
+        const known = type === 'location' ? knownLocations : knownRacks;
+        const url = mapActionUrl(mapData.map.id, 'descendants');
+        const response = await fetchApi(url);
+        if (!response.ok) throw new Error("Failed to fetch available items");
+
+        const payload = await response.json();
+        const fetchedItems = (type === 'location' ? payload.locations : payload.racks).map(item => ({
+            id: item.id,
+            name: item.name || item.display
+        }));
+
+        fetchedItems.forEach(item => known.set(item.id, item));
+
+        const activeGroup = type === 'location' ? locationLayerGroup : rackLayerGroup;
+        const activeIds = new Set();
+        activeGroup?.eachLayer(layer => {
+            if (layer.options.targetId && String(layer.options.targetId) !== String(activeTargetId)) {
+                activeIds.add(layer.options.targetId);
+            }
+        });
+
+        const items = [];
+        for (const [id, item] of known.entries()) {
+            if (!activeIds.has(id) || String(id) === String(activeTargetId)) {
+                items.push(item);
+            }
+        }
+        return items;
+    }
+
+    async function changeSelectedLayerTarget(layer) {
+        if (!layer) return;
+        const type = getLayerPlacementType(layer);
+        const items = await getPlacementCandidates(type, layer.options.targetId);
+        const selected = await showPicker(
+            `Select ${type === 'location' ? 'Location' : 'Rack'} to change`,
+            items,
+            `Available ${type === 'location' ? 'Locations' : 'Racks'}`
+        );
+
+        if (!selected) return;
+
+        layer.options.targetId = selected.id;
+        layer.options.targetName = selected.name;
+        if (layer.options.editLabel) {
+            layer.options.editLabel.setContent(createTooltipContent(selected.name, null));
+        }
+        updateEditLabel(layer);
+    }
     
     function selectLayer(layer, evt = null) {
         if (selectedLayer && selectedLayer._path) {
@@ -131,40 +288,24 @@
 
         if (selectedLayer) {
             if (selectedLayer._path) L.DomUtil.addClass(selectedLayer._path, 'lfp-selected-layer');
-            
-            const btn = document.createElement('button');
-            btn.className = 'btn btn-danger btn-sm rounded-circle d-inline-flex align-items-center justify-content-center p-2';
-            btn.setAttribute('aria-label', 'Delete selected placement');
-            btn.setAttribute('title', 'Delete');
-            
-            const icon = document.createElement('i');
-            icon.className = 'mdi mdi-delete';
-            btn.appendChild(icon);
-            
-            btn.onclick = (e) => {
-                L.DomEvent.stopPropagation(e);
-                deleteSelectedLayer();
-            };
-            btn.onmousedown = (e) => L.DomEvent.stopPropagation(e);
-            
-            const panel = document.createElement('div');
-            panel.className = 'lfp-action-panel';
-            panel.appendChild(btn);
-            
-            let anchorLatLng = null;
-            if (selectedLayer.getBounds) {
-                const bounds = selectedLayer.getBounds();
-                anchorLatLng = L.latLng(bounds.getNorth(), bounds.getCenter().lng);
-            }
 
-            if (anchorLatLng && map) {
-                selectedLayer.bindTooltip(panel, {
-                    permanent: true,
-                    interactive: true,
-                    direction: 'top',
-                    offset: [0, -10],
-                    className: 'lfp-action-tooltip'
-                }).openTooltip(anchorLatLng);
+            const panel = document.createElement('div');
+            panel.className = 'lfp-action-panel gap-2';
+            panel.appendChild(createTooltipActionButton({
+                icon: 'mdi-pencil',
+                label: 'Change target',
+                className: 'lfp-tooltip-action--edit',
+                onClick: () => changeSelectedLayerTarget(selectedLayer)
+            }));
+            panel.appendChild(createTooltipActionButton({
+                icon: 'mdi-delete',
+                label: 'Delete selected placement',
+                className: 'lfp-tooltip-action--danger',
+                onClick: () => deleteSelectedLayer()
+            }));
+            
+            if (map) {
+                openContextActionTooltip(selectedLayer, panel);
                 contextActionLayer = selectedLayer;
                 contextAction = selectedLayer.getTooltip();
 
@@ -366,6 +507,17 @@
         return div;
     }
 
+    function syncCustomDimensionsVisibility(hasBackground) {
+        const toggle = document.getElementById('lfp-custom-dimensions-toggle');
+        const checkbox = document.getElementById('lfp-custom-dimensions');
+        const fields = document.getElementById('lfp-custom-dimensions-fields');
+        if (!toggle || !checkbox || !fields) return;
+
+        toggle.classList.toggle('lfp-hidden', !hasBackground);
+        if (!hasBackground) checkbox.checked = true;
+        fields.classList.toggle('lfp-hidden', hasBackground && !checkbox.checked);
+    }
+
     // Main Init
     function init() {
         config = {
@@ -383,20 +535,27 @@
             document.getElementById('btn-lfp-create-map')?.addEventListener('click', createMapFlow);
 
             const bgInputInit = document.getElementById('lfp-map-bg');
+            const customDimensions = document.getElementById('lfp-custom-dimensions');
+            customDimensions?.addEventListener('change', () => {
+                syncCustomDimensionsVisibility(Boolean(bgInputInit?.files?.[0]));
+            });
             if (bgInputInit) {
                 bgInputInit.addEventListener('change', function(e) {
                     const file = e.target.files && e.target.files[0];
                     if (!file) {
                         bgImageLoadPromise = null;
+                        syncCustomDimensionsVisibility(false);
                         return;
                     }
+                    if (customDimensions) customDimensions.checked = false;
+                    syncCustomDimensionsVisibility(true);
                     bgImageLoadPromise = new Promise((resolve) => {
                         const url = URL.createObjectURL(file);
                         const img = new Image();
                         img.onload = function() {
                             const wInput = document.getElementById("lfp-map-width");
                             const hInput = document.getElementById("lfp-map-height");
-                            if (wInput && hInput) {
+                            if (wInput && hInput && !customDimensions?.checked) {
                                 wInput.value = img.naturalWidth;
                                 hInput.value = img.naturalHeight;
                             }
@@ -411,6 +570,7 @@
                     });
                 });
             }
+            syncCustomDimensionsVisibility(false);
             document.getElementById('btn-lfp-edit')?.addEventListener('click', toggleEditMode);
             document.getElementById('btn-lfp-save')?.addEventListener('click', saveMap);
             document.getElementById('btn-lfp-cancel')?.addEventListener('click', cancelEdit);
@@ -569,7 +729,6 @@
 
         locationLayerGroup = L.layerGroup().addTo(map);
         rackLayerGroup = L.layerGroup().addTo(map);
-        drawObjects();
 
         // inherited mode focus
         if (mapData.inherited && mapData.focus && mapData.focus.geometry) {
@@ -578,6 +737,8 @@
         } else {
             map.fitBounds(bounds);
         }
+
+        drawObjects();
         
         // Handle Geoman creates
                 map.on('click', () => {
@@ -592,6 +753,7 @@
                     layer.options.placementId = null; // New placement
                     layer.options.targetId = pendingPlacementData.id;
                     layer.options.targetName = pendingPlacementData.name;
+                    layer.options.placementType = 'location';
                     layer.options.pane = 'locationPane';
                     layer.options.className = 'lfp-location-poly';
                     // Bugfix: adding to group right after create requires a timeout or removing from map first
@@ -608,6 +770,7 @@
                     layer.options.placementId = null;
                     layer.options.targetId = pendingPlacementData.id;
                     layer.options.targetName = pendingPlacementData.name;
+                    layer.options.placementType = 'rack';
                     layer.options.pane = 'rackPane';
                     layer.options.className = 'rack-placement rack-usage-empty';
                     map.removeLayer(layer);
@@ -643,11 +806,16 @@
             poly.options.placementId = lp.id;
             poly.options.targetId = targetId;
             poly.options.targetName = targetName;
+            poly.options.placementType = 'location';
             
             if (isEditMode) {
                 attachEditLabel(poly, targetName);
             } else {
-                poly.bindTooltip(createTooltipContent(targetName, null), {permanent: false, direction: 'top'});
+                bindSmartTooltip(poly, createTooltipContent(targetName, null), {
+                    permanent: false,
+                    interactive: false,
+                    className: 'lfp-map-tooltip-surface lfp-view-tooltip'
+                });
             }
             
             if (!isEditMode && lp.detail_url) {
@@ -676,6 +844,8 @@
             rect.options.placementId = rp.id;
             rect.options.targetId = targetId;
             rect.options.targetName = targetName;
+            rect.options.placementType = 'rack';
+            rect.options.tooltipClearance = 76;
             
             let subtextParts = [];
             if (rp.used_ru !== undefined && rp.total_ru !== undefined) {
@@ -683,9 +853,6 @@
             }
             if (rp.usage_percentage !== undefined) {
                 subtextParts.push(`${rp.usage_percentage}%`);
-            }
-            if (rp.usage_level !== undefined) {
-                subtextParts.push(`${rp.usage_level} utilization`);
             }
             
             let subtext = '';
@@ -698,14 +865,17 @@
                     subtext = subtext.substring(prefix.length);
                 }
                 if (!subtext) {
-                    const uLvl = rp.usage_level || 'empty';
-                    subtext = `Usage: ${usageText} (${uLvl})`;
+                    subtext = `Usage: ${usageText}`;
                 }
             }
             if (isEditMode) {
                 attachEditLabel(rect, targetName);
             } else {
-                rect.bindTooltip(createTooltipContent(targetName, subtext), {permanent: false, direction: 'top'});
+                bindSmartTooltip(rect, createTooltipContent(targetName, subtext), {
+                    permanent: false,
+                    interactive: false,
+                    className: 'lfp-map-tooltip-surface lfp-view-tooltip'
+                });
             }
             rect.options.ariaLabel = rp.aria_label || rp.label || `${targetName} ${usageText}`;
             
@@ -803,27 +973,9 @@
 
     async function addPlacementFlow(type) {
         if (mapData && mapData.inherited) return;
-        const url = mapActionUrl(mapData.map.id, 'descendants');
         
         try {
-            const response = await fetchApi(url);
-            if (!response.ok) throw new Error("Failed to fetch available items");
-            const payload = await response.json();
-            const fetchedItems = (type === 'location' ? payload.locations : payload.racks).map(item => ({id: item.id, name: item.name || item.display}));
-            
-            const known = type === 'location' ? knownLocations : knownRacks;
-            fetchedItems.forEach(item => known.set(item.id, item));
-            
-            const activeIds = new Set();
-            const activeGroup = type === 'location' ? locationLayerGroup : rackLayerGroup;
-            activeGroup.eachLayer(layer => {
-                if (layer.options.targetId) activeIds.add(layer.options.targetId);
-            });
-            
-            const items = [];
-            for (const [id, item] of known.entries()) {
-                if (!activeIds.has(id)) items.push(item);
-            }
+            const items = await getPlacementCandidates(type);
             
             const labelText = `Available ${type === 'location' ? 'Locations' : 'Racks'}`;
             const selected = await showPicker(`Select ${type === 'location' ? 'Location' : 'Rack'} to place`, items, labelText);

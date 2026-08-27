@@ -126,10 +126,6 @@
 }
 
 
-
-
-
-
 .lfp-edit-label {
     background: transparent !important;
     border: none !important;
@@ -145,14 +141,34 @@
     display: none !important;
 }
 
-.lfp-action-tooltip {
-    background: transparent !important;
+.lfp-map-tooltip-surface {
+    background: #fff !important;
+    color: #111827 !important;
     border: none !important;
-    box-shadow: none !important;
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.08) !important;
+    opacity: 1 !important;
+    border-radius: 0.75rem;
+}
+
+.lfp-map-tooltip-surface .lfp-label,
+.lfp-map-tooltip-surface .lfp-label span {
+    color: #111827 !important;
+}
+
+.lfp-action-tooltip {
     padding: 0 !important;
     pointer-events: auto !important;
+    z-index: 900;
 }
 .lfp-action-tooltip::before {
+    display: none !important;
+}
+
+.lfp-map-container .leaflet-tooltip-bottom.lfp-action-tooltip {
+    margin-top: 4px;
+}
+
+.lfp-map-tooltip-surface::before {
     display: none !important;
 }
 
@@ -161,13 +177,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 1);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     padding: 6px;
-    border-radius: 12px;
     animation: lfpPopIn 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
@@ -188,4 +198,35 @@
         opacity: 1;
         transform: none;
     }
+}
+
+.lfp-tooltip-action {
+    background: transparent;
+    border: none;
+    min-width: 2rem;
+    min-height: 2rem;
+    padding: 0.35rem;
+    border-radius: 0.65rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, color 0.2s, background-color 0.2s;
+}
+
+.lfp-tooltip-action--edit {
+    color: var(--bs-primary);
+}
+
+.lfp-tooltip-action--danger {
+    color: var(--bs-danger);
+}
+
+.lfp-tooltip-action:hover {
+    color: var(--bs-white);
+    background: var(--bs-primary);
+    transform: translateY(-1px);
+}
+
+.lfp-tooltip-action--danger:hover {
+    background: var(--bs-danger);
 }
