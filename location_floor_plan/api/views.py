@@ -10,30 +10,30 @@ from nautobot.dcim.models import Location
 from rest_framework import decorators, parsers, response, status, views
 from rest_framework.exceptions import APIException, MethodNotAllowed, ValidationError
 
-from location_floor_plan.api.filtersets import LocationMapFilterSet, LocationPlacementFilterSet, RackPlacementFilterSet
+from location_floor_plan.api.filtersets import FloorPlanFilterSet, LocationPlacementFilterSet, RackPlacementFilterSet
 from location_floor_plan.api.serializers import (
-    LocationMapSerializer,
-    LocationMapSnapshotSerializer,
+    FloorPlanSerializer,
+    FloorPlanSnapshotSerializer,
     LocationPlacementSerializer,
     RackPlacementSerializer,
-    ResolvedLocationMapSerializer,
+    ResolvedFloorPlanSerializer,
     SnapshotWriteSerializer,
 )
-from location_floor_plan.models import LocationMap, LocationPlacement, RackPlacement
+from location_floor_plan.models import FloorPlan, LocationPlacement, RackPlacement
 from location_floor_plan.services import (
     RevisionConflict,
     available_descendants,
-    create_location_map,
+    create_floor_plan,
     create_location_placement,
     create_rack_placement,
-    delete_location_map,
+    delete_floor_plan,
     delete_location_placement,
     delete_rack_placement,
     get_visible_snapshot,
     renderer_payload,
     replace_background,
     replace_snapshot,
-    update_location_map,
+    update_floor_plan,
     update_location_placement,
     update_rack_placement,
 )
@@ -83,12 +83,12 @@ def _expected_create_revision(request, data=None):
     return revision
 
 
-class LocationMapViewSet(NautobotModelViewSet):
+class FloorPlanViewSet(NautobotModelViewSet):
     """CRUD adapter for maps delegating writes to the mutation service."""
 
-    queryset = LocationMap.objects.select_related("location")
-    serializer_class = LocationMapSerializer
-    filterset_class = LocationMapFilterSet
+    queryset = FloorPlan.objects.select_related("location")
+    serializer_class = FloorPlanSerializer
+    filterset_class = FloorPlanFilterSet
     parser_classes = [parsers.JSONParser, parsers.MultiPartParser, parsers.FormParser]
 
     def get_queryset(self):
@@ -124,7 +124,7 @@ class LocationMapViewSet(NautobotModelViewSet):
         data.pop("_custom_field_data", None)
         data.pop("expected_revision", None)
         try:
-            obj = create_location_map(user=self.request.user, expected_revision=expected_revision, **data)
+            obj = create_floor_plan(user=self.request.user, expected_revision=expected_revision, **data)
         except RevisionConflict as exc:
             raise Conflict(exc.messages) from exc
         except DjangoValidationError as exc:
@@ -137,9 +137,9 @@ class LocationMapViewSet(NautobotModelViewSet):
         data.pop("expected_revision", None)
         data.pop("location", None)
         try:
-            obj = update_location_map(
+            obj = update_floor_plan(
                 user=self.request.user,
-                location_map=self.get_object(),
+                floor_plan=self.get_object(),
                 expected_revision=expected_revision,
                 **data,
             )
@@ -163,8 +163,8 @@ class LocationMapViewSet(NautobotModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         try:
-            delete_location_map(
-                user=request.user, location_map=self.get_object(), expected_revision=_expected_revision(request)
+            delete_floor_plan(
+                user=request.user, floor_plan=self.get_object(), expected_revision=_expected_revision(request)
             )
         except RevisionConflict as exc:
             return _conflict_response(exc)
@@ -174,14 +174,14 @@ class LocationMapViewSet(NautobotModelViewSet):
 
     @decorators.action(detail=True, methods=["get", "put"])
     def snapshot(self, request, pk=None):  # pylint: disable=unused-argument
-        location_map = self.get_object()
+        floor_plan = self.get_object()
         if request.method == "PUT":
             write_serializer = SnapshotWriteSerializer(data=request.data, context={"request": request})
             write_serializer.is_valid(raise_exception=True)
             try:
                 payload = replace_snapshot(
                     user=request.user,
-                    location_map=location_map,
+                    floor_plan=floor_plan,
                     expected_revision=_expected_revision(request, write_serializer.validated_data),
                     location_placements=write_serializer.validated_data["location_placements"],
                     rack_placements=write_serializer.validated_data["rack_placements"],
@@ -191,9 +191,9 @@ class LocationMapViewSet(NautobotModelViewSet):
                 return _conflict_response(exc)
             except DjangoValidationError as exc:
                 raise ValidationError(exc.messages) from exc
-            return response.Response(LocationMapSnapshotSerializer(payload, context={"request": request}).data)
-        payload = get_visible_snapshot(user=request.user, location_map=location_map)
-        return response.Response(LocationMapSnapshotSerializer(payload, context={"request": request}).data)
+            return response.Response(FloorPlanSnapshotSerializer(payload, context={"request": request}).data)
+        payload = get_visible_snapshot(user=request.user, floor_plan=floor_plan)
+        return response.Response(FloorPlanSnapshotSerializer(payload, context={"request": request}).data)
 
     @decorators.action(detail=True, methods=["get"])
     def descendants(self, request, pk=None):  # pylint: disable=unused-argument
@@ -217,15 +217,15 @@ class LocationMapViewSet(NautobotModelViewSet):
 
     @decorators.action(detail=True, methods=["get", "put"])
     def background(self, request, pk=None):  # pylint: disable=unused-argument
-        location_map = self.get_object()
+        floor_plan = self.get_object()
         if request.method == "PUT":
             upload = request.FILES.get("background") or request.FILES.get("file")
             if upload is None:
                 raise ValidationError("Background file is required.")
             try:
-                location_map = replace_background(
+                floor_plan = replace_background(
                     user=request.user,
-                    location_map=location_map,
+                    floor_plan=floor_plan,
                     expected_revision=_expected_revision(request),
                     upload=upload,
                 )
@@ -233,9 +233,9 @@ class LocationMapViewSet(NautobotModelViewSet):
                 return _conflict_response(exc)
             except DjangoValidationError as exc:
                 raise ValidationError(exc.messages) from exc
-        if not location_map.background:
+        if not floor_plan.background:
             raise ValidationError("No background is available.")
-        resp = FileResponse(location_map.background.open("rb"), content_type="image/png")
+        resp = FileResponse(floor_plan.background.open("rb"), content_type="image/png")
         resp["X-Content-Type-Options"] = "nosniff"
         resp["Cache-Control"] = "private, no-store"
         resp["Content-Security-Policy"] = "default-src 'none'; img-src 'self'"
@@ -267,7 +267,7 @@ class WritablePlacementMixin:
 
 
 class LocationPlacementViewSet(WritablePlacementMixin, NautobotModelViewSet):
-    queryset = LocationPlacement.objects.select_related("location_map", "location")
+    queryset = LocationPlacement.objects.select_related("floor_plan", "location")
     serializer_class = LocationPlacementSerializer
     filterset_class = LocationPlacementFilterSet
 
@@ -277,10 +277,10 @@ class LocationPlacementViewSet(WritablePlacementMixin, NautobotModelViewSet):
             .get_queryset()
             .restrict(self.request.user, "view")
             .filter(
-                location_map__in=LocationMap.objects.restrict(self.request.user, "view"),
+                floor_plan__in=FloorPlan.objects.restrict(self.request.user, "view"),
                 location__in=Location.objects.restrict(self.request.user, "view"),
             )
-            .filter(location_map__location__in=Location.objects.restrict(self.request.user, "view"))
+            .filter(floor_plan__location__in=Location.objects.restrict(self.request.user, "view"))
         )
 
     def perform_create(self, serializer):
@@ -298,7 +298,7 @@ class LocationPlacementViewSet(WritablePlacementMixin, NautobotModelViewSet):
         data = dict(serializer.validated_data)
         expected = _expected_revision(self.request, data)
         data.pop("expected_revision", None)
-        data.pop("location_map", None)
+        data.pop("floor_plan", None)
         data.pop("location", None)
         try:
             serializer.instance = update_location_placement(
@@ -322,7 +322,7 @@ class LocationPlacementViewSet(WritablePlacementMixin, NautobotModelViewSet):
 
 
 class RackPlacementViewSet(WritablePlacementMixin, NautobotModelViewSet):
-    queryset = RackPlacement.objects.select_related("location_map", "rack")
+    queryset = RackPlacement.objects.select_related("floor_plan", "rack")
     serializer_class = RackPlacementSerializer
     filterset_class = RackPlacementFilterSet
 
@@ -334,10 +334,10 @@ class RackPlacementViewSet(WritablePlacementMixin, NautobotModelViewSet):
             .get_queryset()
             .restrict(self.request.user, "view")
             .filter(
-                location_map__in=LocationMap.objects.restrict(self.request.user, "view"),
+                floor_plan__in=FloorPlan.objects.restrict(self.request.user, "view"),
                 rack__in=Rack.objects.restrict(self.request.user, "view"),
             )
-            .filter(location_map__location__in=Location.objects.restrict(self.request.user, "view"))
+            .filter(floor_plan__location__in=Location.objects.restrict(self.request.user, "view"))
         )
 
     def perform_create(self, serializer):
@@ -355,7 +355,7 @@ class RackPlacementViewSet(WritablePlacementMixin, NautobotModelViewSet):
         data = dict(serializer.validated_data)
         expected = _expected_revision(self.request, data)
         data.pop("expected_revision", None)
-        data.pop("location_map", None)
+        data.pop("floor_plan", None)
         data.pop("rack", None)
         try:
             serializer.instance = update_rack_placement(
@@ -378,11 +378,11 @@ class RackPlacementViewSet(WritablePlacementMixin, NautobotModelViewSet):
         return response.Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class ResolvedLocationMapView(views.APIView):
+class ResolvedFloorPlanView(views.APIView):
     """Resolve the effective map for a Location."""
 
     queryset = Location.objects.all()
-    serializer_class = ResolvedLocationMapSerializer
+    serializer_class = ResolvedFloorPlanSerializer
 
     def get(self, request, location_id):
         location = Location.objects.get(pk=location_id)

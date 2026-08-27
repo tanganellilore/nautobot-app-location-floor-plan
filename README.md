@@ -6,7 +6,7 @@ Location Floor Plan is a Nautobot App (`location_floor_plan`) for maintaining in
 
 Location Floor Plan visualizes Nautobot data; it does not replace it. Nautobot Locations, Racks, Devices, and object permissions remain the source of truth. The app stores only map canvases and placement geometry:
 
-- `LocationMap`: one canvas owned by one Location.
+- `FloorPlan`: one canvas owned by one Location.
 - `LocationPlacement`: a rectangle or polygon for a strict descendant Location on a map.
 - `RackPlacement`: a rack rectangle for a Rack on the map owner's Location or any descendant Location.
 
@@ -94,25 +94,25 @@ poetry run invoke build-and-check-docs
 | Capability | Required permissions |
 | --- | --- |
 | Open Location Floor Plan tab for a Location | `dcim.view_location` on the requested Location. |
-| View a map | `location_floor_plan.view_locationmap` and `dcim.view_location` on the map owner. |
+| View a map | `location_floor_plan.view_floorplan` and `dcim.view_location` on the map owner. |
 | View a complete snapshot | View permission on the map, all included `LocationPlacement`/`RackPlacement` objects, target Locations, and target Racks. |
-| Create a map | `location_floor_plan.add_locationmap` plus `dcim.view_location` on the owner; constrained permissions are enforced after create. |
-| Change/delete a map or background | `location_floor_plan.change_locationmap`/`delete_locationmap` on the map and constrained object permission. |
-| Create/change/delete Location placements | Parent `location_floor_plan.change_locationmap`, relevant `add/change/delete_locationplacement`, target `dcim.view_location`, and constrained permission. |
-| Create/change/delete Rack placements | Parent `location_floor_plan.change_locationmap`, relevant `add/change/delete_rackplacement`, target `dcim.view_rack`, and constrained permission. |
+| Create a map | `location_floor_plan.add_floorplan` plus `dcim.view_location` on the owner; constrained permissions are enforced after create. |
+| Change/delete a map or background | `location_floor_plan.change_floorplan`/`delete_floorplan` on the map and constrained object permission. |
+| Create/change/delete Location placements | Parent `location_floor_plan.change_floorplan`, relevant `add/change/delete_locationplacement`, target `dcim.view_location`, and constrained permission. |
+| Create/change/delete Rack placements | Parent `location_floor_plan.change_floorplan`, relevant `add/change/delete_rackplacement`, target `dcim.view_rack`, and constrained permission. |
 | Rack utilization data | `dcim.view_rack` for racks included in the resolved payload. |
 
 ## Data model definitions
 
-- `LocationMap(location, logical_width, logical_height, background, revision)`: one-to-one with `dcim.Location`; owner is immutable; logical dimensions are 1 to 1,000,000; revision starts at 1 and increments once per accepted mutation.
-- `LocationPlacement(location_map, location, geometry)`: unique per map/location; target must be a strict descendant of the map owner; geometry is either `{"type":"rectangle","x":...}` or `{"type":"polygon","points":[[x,y],...]}` within map bounds.
-- `RackPlacement(location_map, rack, x, y, width, height)`: unique per map/rack; target Rack must belong to the map owner or one of its descendants; rectangle must fit within map bounds.
+- `FloorPlan(location, logical_width, logical_height, background, revision)`: one-to-one with `dcim.Location`; owner is immutable; logical dimensions are 1 to 1,000,000; revision starts at 1 and increments once per accepted mutation.
+- `LocationPlacement(floor_plan, location, geometry)`: unique per map/location; target must be a strict descendant of the map owner; geometry is either `{"type":"rectangle","x":...}` or `{"type":"polygon","points":[[x,y],...]}` within map bounds.
+- `RackPlacement(floor_plan, rack, x, y, width, height)`: unique per map/rack; target Rack must belong to the map owner or one of its descendants; rectangle must fit within map bounds.
 
 ## Arbitrary-depth inheritance algorithm
 
 When rendering a Location, Location Floor Plan resolves the effective map as follows:
 
-1. If the requested Location owns a visible `LocationMap`, render that own map with no focus qualifier.
+1. If the requested Location owns a visible `FloorPlan`, render that own map with no focus qualifier.
 2. Otherwise, walk ancestors from the root toward the immediate parent.
 3. The first ancestor that both owns a visible map and has an explicit `LocationPlacement` for the requested Location is selected.
 4. The placement geometry becomes `focus` in the resolved payload.
@@ -149,11 +149,11 @@ Base API path: `/api/plugins/location-floor-plan/`.
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET/POST /location-maps/` | List/create maps. Create requires `If-None-Match: *` or `expected_revision: 0`. |
-| `GET/PUT/PATCH/DELETE /location-maps/{id}/` | Manage one map. Writes/deletes require `If-Match: <revision>` or `expected_revision`. |
-| `GET/PUT /location-maps/{id}/snapshot/` | Read or atomically replace all placements. PUT supports `delete_stale_ids`. |
-| `GET/PUT /location-maps/{id}/background/` | Download or replace normalized background image using form file `background` or `file`. |
-| `GET /location-maps/{id}/descendants/` | Picker data: visible unused descendant Locations and Racks. |
+| `GET/POST /floor-plans/` | List/create maps. Create requires `If-None-Match: *` or `expected_revision: 0`. |
+| `GET/PUT/PATCH/DELETE /floor-plans/{id}/` | Manage one map. Writes/deletes require `If-Match: <revision>` or `expected_revision`. |
+| `GET/PUT /floor-plans/{id}/snapshot/` | Read or atomically replace all placements. PUT supports `delete_stale_ids`. |
+| `GET/PUT /floor-plans/{id}/background/` | Download or replace normalized background image using form file `background` or `file`. |
+| `GET /floor-plans/{id}/descendants/` | Picker data: visible unused descendant Locations and Racks. |
 | `GET/POST /location-placements/`, `GET/PUT/PATCH/DELETE /location-placements/{id}/` | Placement CRUD with parent map revision guard for writes. |
 | `GET/POST /rack-placements/`, `GET/PUT/PATCH/DELETE /rack-placements/{id}/` | Rack placement CRUD with parent map revision guard for writes. |
 | `GET /locations/{location_id}/resolved-map/` | Resolver payload for the UI and external consumers. |

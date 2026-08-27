@@ -10,9 +10,9 @@ menu_items = (
                 name="Locations",
                 items=(
                     NavMenuItem(
-                        link="plugins:location_floor_plan:locationmap_list",
+                        link="plugins:location_floor_plan:floorplan_list",
                         name="Floor Plans",
-                        permissions=("location_floor_plan.view_locationmap",),
+                        permissions=("location_floor_plan.view_floorplan",),
                     ),
                 ),
             ),

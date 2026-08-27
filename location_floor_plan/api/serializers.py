@@ -6,11 +6,11 @@ from nautobot.apps.api import NautobotModelSerializer
 from nautobot.dcim.models import Location, Rack
 from rest_framework import serializers
 
-from location_floor_plan.models import LocationMap, LocationPlacement, RackPlacement
+from location_floor_plan.models import FloorPlan, LocationPlacement, RackPlacement
 
 
-class LocationMapSerializer(NautobotModelSerializer):
-    """Serializer for location maps."""
+class FloorPlanSerializer(NautobotModelSerializer):
+    """Serializer for floor plans."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -19,7 +19,7 @@ class LocationMapSerializer(NautobotModelSerializer):
             self.fields["location"].queryset = Location.objects.restrict(request.user, "view")
 
     class Meta:
-        model = LocationMap
+        model = FloorPlan
         # Keep explicit fields to avoid exposing unintended model/API fields.
         # pylint: disable-next=nb-use-fields-all
         fields = ["id", "url", "display", "location", "logical_width", "logical_height", "revision"]
@@ -35,14 +35,14 @@ class LocationPlacementSerializer(NautobotModelSerializer):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
         if request is not None:
-            self.fields["location_map"].queryset = LocationMap.objects.restrict(request.user, "view")
+            self.fields["floor_plan"].queryset = FloorPlan.objects.restrict(request.user, "view")
             self.fields["location"].queryset = Location.objects.restrict(request.user, "view")
 
     class Meta:
         model = LocationPlacement
         # Keep explicit fields to avoid exposing unintended model/API fields.
         # pylint: disable-next=nb-use-fields-all
-        fields = ["id", "url", "display", "location_map", "location", "geometry", "expected_revision"]
+        fields = ["id", "url", "display", "floor_plan", "location", "geometry", "expected_revision"]
         read_only_fields = ["id", "url", "display"]
 
 
@@ -55,30 +55,30 @@ class RackPlacementSerializer(NautobotModelSerializer):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
         if request is not None:
-            self.fields["location_map"].queryset = LocationMap.objects.restrict(request.user, "view")
+            self.fields["floor_plan"].queryset = FloorPlan.objects.restrict(request.user, "view")
             self.fields["rack"].queryset = Rack.objects.restrict(request.user, "view")
 
     class Meta:
         model = RackPlacement
         # Keep explicit fields to avoid exposing unintended model/API fields.
         # pylint: disable-next=nb-use-fields-all
-        fields = ["id", "url", "display", "location_map", "rack", "x", "y", "width", "height", "expected_revision"]
+        fields = ["id", "url", "display", "floor_plan", "rack", "x", "y", "width", "height", "expected_revision"]
         read_only_fields = ["id", "url", "display"]
 
 
-class ResolvedLocationMapSerializer(serializers.Serializer):
+class ResolvedFloorPlanSerializer(serializers.Serializer):
     """Serializer for resolver result."""
 
     requested_location = serializers.PrimaryKeyRelatedField(queryset=Location.objects.all())
-    location_map = LocationMapSerializer(allow_null=True)
+    floor_plan = FloorPlanSerializer(allow_null=True)
     qualifier = LocationPlacementSerializer(allow_null=True)
     source = serializers.CharField()
 
 
-class LocationMapSnapshotSerializer(serializers.Serializer):
+class FloorPlanSnapshotSerializer(serializers.Serializer):
     """Minimal snapshot payload."""
 
-    map = LocationMapSerializer()
+    map = FloorPlanSerializer()
     location_placements = LocationPlacementSerializer(many=True)
     rack_placements = RackPlacementSerializer(many=True)
     stale_location_placements = LocationPlacementSerializer(many=True)

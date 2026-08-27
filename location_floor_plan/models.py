@@ -116,7 +116,7 @@ def _on_segment(a, b, c) -> bool:
     return min(a[0], c[0]) <= b[0] <= max(a[0], c[0]) and min(a[1], c[1]) <= b[1] <= max(a[1], c[1])
 
 
-class LocationMap(PrimaryModel):
+class FloorPlan(PrimaryModel):
     """A floor/map canvas owned by a Nautobot Location."""
 
     is_saved_view_model = False
@@ -131,8 +131,8 @@ class LocationMap(PrimaryModel):
 
     class Meta:
         ordering = ["location__name"]
-        verbose_name = "location map"
-        verbose_name_plural = "location maps"
+        verbose_name = "floor plan"
+        verbose_name_plural = "floor plans"
         constraints = [
             models.CheckConstraint(condition=models.Q(logical_width__gte=1), name="location_floor_plan_map_width_gte_1"),
             models.CheckConstraint(condition=models.Q(logical_height__gte=1), name="location_floor_plan_map_height_gte_1"),
@@ -157,84 +157,84 @@ class LocationMap(PrimaryModel):
 
 
 class LocationPlacement(PrimaryModel):
-    """Placement of a descendant Location on a LocationMap."""
+    """Placement of a descendant Location on a FloorPlan."""
 
-    location_map = models.ForeignKey(LocationMap, on_delete=models.CASCADE, related_name="location_placements")
+    floor_plan = models.ForeignKey(FloorPlan, on_delete=models.CASCADE, related_name="location_placements")
     location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name="location_floor_plan_placements")
     geometry = models.JSONField()
 
-    natural_key_field_names = ["location_map", "location"]
+    natural_key_field_names = ["floor_plan", "location"]
 
     class Meta:
         ordering = ["location__name"]
         verbose_name = "location placement"
         verbose_name_plural = "location placements"
         constraints = [
-            models.UniqueConstraint(fields=["location_map", "location"], name="location_floor_plan_unique_location_placement")
+            models.UniqueConstraint(fields=["floor_plan", "location"], name="location_floor_plan_unique_location_placement")
         ]
 
     def __str__(self):
-        return f"{self.location} on {self.location_map}"
+        return f"{self.location} on {self.floor_plan}"
 
     def clean(self):
         super().clean()
         if self.present_in_database:
-            old = type(self).objects.only("location_map_id", "location_id").get(pk=self.pk)
-            if old.location_map_id != self.location_map_id:
-                raise ValidationError({"location_map": "Placement map is immutable after creation."})
+            old = type(self).objects.only("floor_plan_id", "location_id").get(pk=self.pk)
+            if old.floor_plan_id != self.floor_plan_id:
+                raise ValidationError({"floor_plan": "Placement map is immutable after creation."})
             if old.location_id != self.location_id:
                 raise ValidationError({"location": "Placement target is immutable after creation."})
-        if self.location_map_id and self.location_id and not _is_descendant(self.location, self.location_map.location):
+        if self.floor_plan_id and self.location_id and not _is_descendant(self.location, self.floor_plan.location):
             raise ValidationError({"location": "Placed location must be a strict descendant of the map owner."})
-        if self.location_map_id:
+        if self.floor_plan_id:
             validate_geometry_schema(
-                self.geometry, width=self.location_map.logical_width, height=self.location_map.logical_height
+                self.geometry, width=self.floor_plan.logical_width, height=self.floor_plan.logical_height
             )
 
 
 class RackPlacement(PrimaryModel):
-    """Placement of a Rack on a LocationMap."""
+    """Placement of a Rack on a FloorPlan."""
 
-    location_map = models.ForeignKey(LocationMap, on_delete=models.CASCADE, related_name="rack_placements")
+    floor_plan = models.ForeignKey(FloorPlan, on_delete=models.CASCADE, related_name="rack_placements")
     rack = models.ForeignKey(Rack, on_delete=models.CASCADE, related_name="location_floor_plan_placements")
     x = models.PositiveIntegerField()
     y = models.PositiveIntegerField()
     width = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     height = models.PositiveIntegerField(validators=[MinValueValidator(1)])
 
-    natural_key_field_names = ["location_map", "rack"]
+    natural_key_field_names = ["floor_plan", "rack"]
 
     class Meta:
         ordering = ["rack__name"]
         verbose_name = "rack placement"
         verbose_name_plural = "rack placements"
         constraints = [
-            models.UniqueConstraint(fields=["location_map", "rack"], name="location_floor_plan_unique_rack_placement"),
+            models.UniqueConstraint(fields=["floor_plan", "rack"], name="location_floor_plan_unique_rack_placement"),
             models.CheckConstraint(condition=models.Q(width__gte=1), name="location_floor_plan_rack_width_gte_1"),
             models.CheckConstraint(condition=models.Q(height__gte=1), name="location_floor_plan_rack_height_gte_1"),
         ]
 
     def __str__(self):
-        return f"{self.rack} on {self.location_map}"
+        return f"{self.rack} on {self.floor_plan}"
 
     def clean(self):
         super().clean()
         if self.present_in_database:
-            old = type(self).objects.only("location_map_id", "rack_id").get(pk=self.pk)
-            if old.location_map_id != self.location_map_id:
-                raise ValidationError({"location_map": "Placement map is immutable after creation."})
+            old = type(self).objects.only("floor_plan_id", "rack_id").get(pk=self.pk)
+            if old.floor_plan_id != self.floor_plan_id:
+                raise ValidationError({"floor_plan": "Placement map is immutable after creation."})
             if old.rack_id != self.rack_id:
                 raise ValidationError({"rack": "Placement target is immutable after creation."})
         if (
-            self.location_map_id
+            self.floor_plan_id
             and self.rack_id
-            and self.rack.location_id != self.location_map.location_id
-            and not _is_descendant(self.rack.location, self.location_map.location)
+            and self.rack.location_id != self.floor_plan.location_id
+            and not _is_descendant(self.rack.location, self.floor_plan.location)
         ):
             raise ValidationError({"rack": "Placed rack must belong to the map owner or one of its descendants."})
-        if self.location_map_id:
+        if self.floor_plan_id:
             if (
-                self.x + self.width > self.location_map.logical_width
-                or self.y + self.height > self.location_map.logical_height
+                self.x + self.width > self.floor_plan.logical_width
+                or self.y + self.height > self.floor_plan.logical_height
             ):
                 raise ValidationError("Rack placement rectangle exceeds map bounds.")

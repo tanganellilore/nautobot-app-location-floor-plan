@@ -16,7 +16,7 @@ from django.urls import reverse
 from nautobot.dcim.models import Device, Location, Rack
 from PIL import Image, UnidentifiedImageError
 
-from location_floor_plan.models import LocationMap, LocationPlacement, RackPlacement, _is_descendant
+from location_floor_plan.models import FloorPlan, LocationPlacement, RackPlacement, _is_descendant
 
 SAFE_SVG_ELEMENTS = {
     "svg",
@@ -67,34 +67,34 @@ class ResolvedMap:
     """Result returned by the map resolver."""
 
     requested_location: Location
-    location_map: LocationMap | None
+    floor_plan: FloorPlan | None
     qualifier: LocationPlacement | None
     source: str
 
 
-def resolve_location_map(location: Location, *, user=None) -> ResolvedMap:
+def resolve_floor_plan(location: Location, *, user=None) -> ResolvedMap:
     """Resolve the map that should render for location without implicit focus."""
     location = Location.objects.with_tree_fields().get(pk=location.pk)
-    own = LocationMap.objects.filter(location=location).select_related("location").first()
-    if own and _can(user, "location_floor_plan.view_locationmap", own) and _can(user, "dcim.view_location", own.location):
+    own = FloorPlan.objects.filter(location=location).select_related("location").first()
+    if own and _can(user, "location_floor_plan.view_floorplan", own) and _can(user, "dcim.view_location", own.location):
         return ResolvedMap(location, own, None, "own")
 
     ancestors = list(location.ancestors(include_self=False).values_list("pk", flat=True))
     ancestor_ids = list(reversed(ancestors))
     maps = {
-        m.location_id: m for m in LocationMap.objects.filter(location_id__in=ancestor_ids).select_related("location")
+        m.location_id: m for m in FloorPlan.objects.filter(location_id__in=ancestor_ids).select_related("location")
     }
     placements = {}
     for placement in LocationPlacement.objects.filter(
-        location=location, location_map__location_id__in=ancestor_ids
-    ).select_related("location_map__location", "location"):
-        placements[placement.location_map_id] = placement
+        location=location, floor_plan__location_id__in=ancestor_ids
+    ).select_related("floor_plan__location", "location"):
+        placements[placement.floor_plan_id] = placement
     for ancestor_id in ancestor_ids:
         candidate = maps.get(ancestor_id)
         if (
             candidate
             and candidate.pk in placements
-            and _can(user, "location_floor_plan.view_locationmap", candidate)
+            and _can(user, "location_floor_plan.view_floorplan", candidate)
             and _can(user, "location_floor_plan.view_locationplacement", placements[candidate.pk])
             and _can(user, "dcim.view_location", candidate.location)
             and _can(user, "dcim.view_location", placements[candidate.pk].location)
@@ -116,21 +116,21 @@ def _setting(name, default):
     return settings.PLUGINS_CONFIG.get("location_floor_plan", {}).get(name, default)
 
 
-def _assert_revision(location_map: LocationMap | None, expected_revision: int) -> None:
-    if location_map is None:
+def _assert_revision(floor_plan: FloorPlan | None, expected_revision: int) -> None:
+    if floor_plan is None:
         if expected_revision != 0:
             raise ValidationError("Creation requires expected revision 0.")
-    elif location_map.revision != expected_revision:
+    elif floor_plan.revision != expected_revision:
         raise RevisionConflict("Revision conflict.")
 
 
-def _check_snapshot_view(user, location_map: LocationMap) -> None:
-    _check(user, "location_floor_plan.view_locationmap", location_map)
-    _check(user, "dcim.view_location", location_map.location)
-    for placement in location_map.location_placements.select_related("location"):
+def _check_snapshot_view(user, floor_plan: FloorPlan) -> None:
+    _check(user, "location_floor_plan.view_floorplan", floor_plan)
+    _check(user, "dcim.view_location", floor_plan.location)
+    for placement in floor_plan.location_placements.select_related("location"):
         _check(user, "location_floor_plan.view_locationplacement", placement)
         _check(user, "dcim.view_location", placement.location)
-    for placement in location_map.rack_placements.select_related("rack"):
+    for placement in floor_plan.rack_placements.select_related("rack"):
         _check(user, "location_floor_plan.view_rackplacement", placement)
         _check(user, "dcim.view_rack", placement.rack)
 
@@ -142,36 +142,36 @@ def _assert_restricted(user, action: str, obj) -> None:
         raise PermissionDenied(f"Object is outside constrained {action} permission.")
 
 
-def _materialize_snapshot(user, location_map: LocationMap) -> dict:
-    _check(user, "location_floor_plan.view_locationmap", location_map)
-    _check(user, "dcim.view_location", location_map.location)
-    location_items = list(location_map.location_placements.select_related("location", "location_map__location"))
-    rack_items = list(location_map.rack_placements.select_related("rack", "rack__location", "location_map__location"))
+def _materialize_snapshot(user, floor_plan: FloorPlan) -> dict:
+    _check(user, "location_floor_plan.view_floorplan", floor_plan)
+    _check(user, "dcim.view_location", floor_plan.location)
+    location_items = list(floor_plan.location_placements.select_related("location", "floor_plan__location"))
+    rack_items = list(floor_plan.rack_placements.select_related("rack", "rack__location", "floor_plan__location"))
     for placement in location_items:
         _check(user, "location_floor_plan.view_locationplacement", placement)
         _check(user, "dcim.view_location", placement.location)
     for placement in rack_items:
         _check(user, "location_floor_plan.view_rackplacement", placement)
         _check(user, "dcim.view_rack", placement.rack)
-    return _split_snapshot(location_map, location_items, rack_items)
+    return _split_snapshot(floor_plan, location_items, rack_items)
 
 
-def _split_snapshot(location_map, location_items, rack_items):
+def _split_snapshot(floor_plan, location_items, rack_items):
     valid_locations = []
     stale_locations = []
     valid_racks = []
     stale_racks = []
     for placement in location_items:
-        (valid_locations if _is_descendant(placement.location, location_map.location) else stale_locations).append(
+        (valid_locations if _is_descendant(placement.location, floor_plan.location) else stale_locations).append(
             placement
         )
     for placement in rack_items:
-        valid = placement.rack.location_id == location_map.location_id or _is_descendant(
-            placement.rack.location, location_map.location
+        valid = placement.rack.location_id == floor_plan.location_id or _is_descendant(
+            placement.rack.location, floor_plan.location
         )
         (valid_racks if valid else stale_racks).append(placement)
     return {
-        "map": location_map,
+        "map": floor_plan,
         "location_placements": valid_locations,
         "rack_placements": valid_racks,
         "stale_location_placements": stale_locations,
@@ -180,15 +180,15 @@ def _split_snapshot(location_map, location_items, rack_items):
 
 
 @transaction.atomic
-def create_location_map(
+def create_floor_plan(
     *, user, location, logical_width, logical_height, expected_revision: int, background=None
-) -> LocationMap:
+) -> FloorPlan:
     """Create a map while locking its owner Location."""
-    _check(user, "location_floor_plan.add_locationmap")
+    _check(user, "location_floor_plan.add_floorplan")
     _check(user, "dcim.view_location", location)
     Location.objects.select_for_update().get(pk=location.pk)
     _assert_revision(None, expected_revision)
-    obj = LocationMap(
+    obj = FloorPlan(
         location=location, logical_width=logical_width, logical_height=logical_height, background=background
     )
     obj.full_clean()
@@ -198,10 +198,10 @@ def create_location_map(
 
 
 @transaction.atomic
-def update_location_map(*, user, location_map, expected_revision: int, **changes) -> LocationMap:
+def update_floor_plan(*, user, floor_plan, expected_revision: int, **changes) -> FloorPlan:
     """Update mutable map fields and increment revision exactly once."""
-    _check(user, "location_floor_plan.change_locationmap", location_map)
-    obj = LocationMap.objects.select_for_update().get(pk=location_map.pk)
+    _check(user, "location_floor_plan.change_floorplan", floor_plan)
+    obj = FloorPlan.objects.select_for_update().get(pk=floor_plan.pk)
     _assert_revision(obj, expected_revision)
     retained_location_placements = list(obj.location_placements.select_related("location"))
     retained_rack_placements = list(obj.rack_placements.select_related("rack"))
@@ -211,10 +211,10 @@ def update_location_map(*, user, location_map, expected_revision: int, **changes
     obj.revision += 1
     obj.full_clean()
     for placement in retained_location_placements:
-        placement.location_map = obj
+        placement.floor_plan = obj
         placement.full_clean()
     for placement in retained_rack_placements:
-        placement.location_map = obj
+        placement.floor_plan = obj
         placement.full_clean()
     obj.save()
     _assert_restricted(user, "change", obj)
@@ -222,25 +222,25 @@ def update_location_map(*, user, location_map, expected_revision: int, **changes
 
 
 @transaction.atomic
-def delete_location_map(*, user, location_map, expected_revision: int) -> None:
+def delete_floor_plan(*, user, floor_plan, expected_revision: int) -> None:
     """Delete a map with revision guard."""
-    _check(user, "location_floor_plan.delete_locationmap", location_map)
-    obj = LocationMap.objects.select_for_update().get(pk=location_map.pk)
+    _check(user, "location_floor_plan.delete_floorplan", floor_plan)
+    obj = FloorPlan.objects.select_for_update().get(pk=floor_plan.pk)
     _assert_revision(obj, expected_revision)
     _assert_restricted(user, "delete", obj)
     obj.delete()
 
 
-def _bump(parent: LocationMap) -> None:
+def _bump(parent: FloorPlan) -> None:
     parent.revision += 1
     parent.full_clean()
     parent.save(update_fields=["revision", "last_updated"])
 
 
-def get_visible_snapshot(*, user, location_map: LocationMap) -> dict:
+def get_visible_snapshot(*, user, floor_plan: FloorPlan) -> dict:
     """Return a full snapshot only when the user can view all included objects."""
     with transaction.atomic():
-        parent = LocationMap.objects.select_related("location").select_for_update().get(pk=location_map.pk)
+        parent = FloorPlan.objects.select_related("location").select_for_update().get(pk=floor_plan.pk)
         return _materialize_snapshot(user, parent)
 
 
@@ -248,15 +248,15 @@ def get_visible_snapshot(*, user, location_map: LocationMap) -> dict:
 def replace_snapshot(
     *,
     user,
-    location_map: LocationMap,
+    floor_plan: FloorPlan,
     expected_revision: int,
     location_placements,
     rack_placements,
     delete_stale_ids=None,
 ):  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     """Atomically replace all placements on one map and increment revision once."""
-    parent = LocationMap.objects.select_for_update().get(pk=location_map.pk)
-    _check(user, "location_floor_plan.change_locationmap", parent)
+    parent = FloorPlan.objects.select_for_update().get(pk=floor_plan.pk)
+    _check(user, "location_floor_plan.change_floorplan", parent)
     _assert_revision(parent, expected_revision)
 
     existing_location_list = list(parent.location_placements.select_related("location").select_for_update())
@@ -301,7 +301,7 @@ def replace_snapshot(
             obj.geometry = item["geometry"]
         else:
             _check(user, "location_floor_plan.add_locationplacement")
-            obj = LocationPlacement(location_map=parent, location=item["location"], geometry=item["geometry"])
+            obj = LocationPlacement(floor_plan=parent, location=item["location"], geometry=item["geometry"])
         obj.full_clean()
         obj.save()
         _assert_restricted(user, "change" if location_id in existing_locations else "add", obj)
@@ -316,7 +316,7 @@ def replace_snapshot(
                 setattr(obj, key, value)
         else:
             _check(user, "location_floor_plan.add_rackplacement")
-            obj = RackPlacement(location_map=parent, rack=item["rack"], **fields)
+            obj = RackPlacement(floor_plan=parent, rack=item["rack"], **fields)
         obj.full_clean()
         obj.save()
         _assert_restricted(user, "change" if rack_id in existing_racks else "add", obj)
@@ -328,16 +328,16 @@ def replace_snapshot(
 
 @transaction.atomic
 def mutate_placement(
-    *, user, placement_model, action: str, expected_revision: int, instance=None, location_map=None, **data
+    *, user, placement_model, action: str, expected_revision: int, instance=None, floor_plan=None, **data
 ):  # pylint: disable=too-many-arguments
     """Create, update, or delete one placement on exactly one locked map."""
     perm_base = placement_model._meta.model_name
     if action == "create":
-        parent = LocationMap.objects.select_for_update().get(pk=location_map.pk)
-        _check(user, "location_floor_plan.change_locationmap", parent)
+        parent = FloorPlan.objects.select_for_update().get(pk=floor_plan.pk)
+        _check(user, "location_floor_plan.change_floorplan", parent)
         _check(user, f"location_floor_plan.add_{perm_base}")
         _assert_revision(parent, expected_revision)
-        obj = placement_model(location_map=parent, **data)
+        obj = placement_model(floor_plan=parent, **data)
         target = data.get("location") or data.get("rack")
         if target is not None:
             _check(user, f"dcim.view_{target._meta.model_name}", target)
@@ -347,14 +347,14 @@ def mutate_placement(
         _bump(parent)
         _assert_restricted(user, "change", parent)
         return obj
-    parent_id = placement_model.objects.only("location_map_id").get(pk=instance.pk).location_map_id
-    parent = LocationMap.objects.select_for_update().get(pk=parent_id)
+    parent_id = placement_model.objects.only("floor_plan_id").get(pk=instance.pk).floor_plan_id
+    parent = FloorPlan.objects.select_for_update().get(pk=parent_id)
     obj = (
-        placement_model.objects.select_related("location_map")
+        placement_model.objects.select_related("floor_plan")
         .select_for_update()
-        .get(pk=instance.pk, location_map=parent)
+        .get(pk=instance.pk, floor_plan=parent)
     )
-    _check(user, "location_floor_plan.change_locationmap", parent)
+    _check(user, "location_floor_plan.change_floorplan", parent)
     _check(user, f"location_floor_plan.{action}_{perm_base}", obj)
     _assert_revision(parent, expected_revision)
     if action == "delete":
@@ -430,8 +430,8 @@ def _rack_usage(rack, intervals):
 
 
 def renderer_payload(location, *, user):
-    result = resolve_location_map(location, user=user)
-    if result.location_map is None:
+    result = resolve_floor_plan(location, user=user)
+    if result.floor_plan is None:
         return {
             "requested_location": str(location.pk),
             "map": None,
@@ -440,21 +440,21 @@ def renderer_payload(location, *, user):
             "locations": [],
             "racks": [],
         }
-    snapshot = get_visible_snapshot(user=user, location_map=result.location_map)
+    snapshot = get_visible_snapshot(user=user, floor_plan=result.floor_plan)
     racks = [p.rack for p in snapshot["rack_placements"]]
     usage = rack_usage_for_racks(racks)
     return {
         "requested_location": {"id": str(location.pk), "name": str(location)},
         "map": {
-            "id": str(result.location_map.pk),
-            "owner_location": {"id": str(result.location_map.location_id), "name": str(result.location_map.location)},
-            "logical_width": result.location_map.logical_width,
-            "logical_height": result.location_map.logical_height,
-            "revision": result.location_map.revision,
+            "id": str(result.floor_plan.pk),
+            "owner_location": {"id": str(result.floor_plan.location_id), "name": str(result.floor_plan.location)},
+            "logical_width": result.floor_plan.logical_width,
+            "logical_height": result.floor_plan.logical_height,
+            "revision": result.floor_plan.revision,
             "background_url": reverse(
-                "plugins-api:location_floor_plan-api:locationmap-background", kwargs={"pk": result.location_map.pk}
+                "plugins-api:location_floor_plan-api:floorplan-background", kwargs={"pk": result.floor_plan.pk}
             )
-            if result.location_map.background
+            if result.floor_plan.background
             else None,
         },
         "inherited": result.source == "ancestor",
@@ -496,13 +496,13 @@ def renderer_payload(location, *, user):
     }
 
 
-def available_descendants(location_map, *, user):
-    owner = Location.objects.with_tree_fields().get(pk=location_map.location_id)
+def available_descendants(floor_plan, *, user):
+    owner = Location.objects.with_tree_fields().get(pk=floor_plan.location_id)
     descendant_ids = list(owner.descendants(include_self=False).values_list("pk", flat=True))
     descendants = Location.objects.restrict(user, "view").filter(pk__in=descendant_ids).order_by("name")
-    used_locations = location_map.location_placements.values("location_id")
+    used_locations = floor_plan.location_placements.values("location_id")
     locations = descendants.exclude(pk__in=used_locations)
-    used_racks = location_map.rack_placements.values("rack_id")
+    used_racks = floor_plan.rack_placements.values("rack_id")
     rack_location_ids = [owner.pk, *descendant_ids]
     racks = (
         Rack.objects.restrict(user, "view")
@@ -568,9 +568,9 @@ def _rasterize_svg(data):
 
 
 @transaction.atomic
-def replace_background(*, user, location_map, expected_revision, upload):
-    parent = LocationMap.objects.select_for_update().get(pk=location_map.pk)
-    _check(user, "location_floor_plan.change_locationmap", parent)
+def replace_background(*, user, floor_plan, expected_revision, upload):
+    parent = FloorPlan.objects.select_for_update().get(pk=floor_plan.pk)
+    _check(user, "location_floor_plan.change_floorplan", parent)
     _assert_revision(parent, expected_revision)
     png = normalize_background_upload(upload)
     old_name = parent.background.name if parent.background else None

@@ -4,12 +4,12 @@
 
 from nautobot.apps.filters import NautobotFilterSet
 
-from location_floor_plan.models import LocationMap, LocationPlacement, RackPlacement
+from location_floor_plan.models import FloorPlan, LocationPlacement, RackPlacement
 
 
-class LocationMapFilterSet(NautobotFilterSet):
+class FloorPlanFilterSet(NautobotFilterSet):
     class Meta:
-        model = LocationMap
+        model = FloorPlan
         # Keep filters explicit; __all__ could expose unintended fields.
         # pylint: disable-next=nb-use-fields-all
         fields = ["id", "location"]
@@ -20,7 +20,7 @@ class LocationPlacementFilterSet(NautobotFilterSet):
         model = LocationPlacement
         # Keep filters explicit; __all__ could expose unintended fields.
         # pylint: disable-next=nb-use-fields-all
-        fields = ["id", "location_map", "location"]
+        fields = ["id", "floor_plan", "location"]
 
 
 class RackPlacementFilterSet(NautobotFilterSet):
@@ -28,4 +28,4 @@ class RackPlacementFilterSet(NautobotFilterSet):
         model = RackPlacement
         # Keep filters explicit; __all__ could expose unintended fields.
         # pylint: disable-next=nb-use-fields-all
-        fields = ["id", "location_map", "rack"]
+        fields = ["id", "floor_plan", "rack"]

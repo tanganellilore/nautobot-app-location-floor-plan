@@ -50,9 +50,9 @@ sudo systemctl restart nautobot nautobot-worker nautobot-scheduler
 | Capability | Required permissions |
 | --- | --- |
 | View tab | `dcim.view_location`. |
-| View map/snapshot | `location_floor_plan.view_locationmap`, placement view permissions, and target Location/Rack view permissions. |
-| Create map | `location_floor_plan.add_locationmap` plus `dcim.view_location`. |
-| Edit/delete map or background | `location_floor_plan.change_locationmap` or `location_floor_plan.delete_locationmap`. |
+| View map/snapshot | `location_floor_plan.view_floorplan`, placement view permissions, and target Location/Rack view permissions. |
+| Create map | `location_floor_plan.add_floorplan` plus `dcim.view_location`. |
+| Edit/delete map or background | `location_floor_plan.change_floorplan` or `location_floor_plan.delete_floorplan`. |
 | Edit placements | Parent map change permission plus placement add/change/delete and target view permission. |
 
 ## Secure backgrounds

@@ -1,4 +1,4 @@
-"""Phase 2 backend contract tests."""
+"""Floor plan model, resolver, and service contract tests."""
 # pylint: disable=missing-function-docstring,missing-class-docstring,too-many-locals
 
 import threading
@@ -13,15 +13,15 @@ from nautobot.dcim.models import Location, Rack
 from nautobot.extras.models import Status
 from nautobot.users.models import ObjectPermission
 
-from location_floor_plan.models import LocationMap, LocationPlacement, RackPlacement
+from location_floor_plan.models import FloorPlan, LocationPlacement, RackPlacement
 from location_floor_plan.services import (
     RevisionConflict,
     available_descendants,
-    create_location_map,
+    create_floor_plan,
     get_visible_snapshot,
     replace_snapshot,
-    resolve_location_map,
-    update_location_map,
+    resolve_floor_plan,
+    update_floor_plan,
 )
 
 RECT = {"type": "rectangle", "x": 1, "y": 1, "width": 10, "height": 10}
@@ -33,7 +33,7 @@ def make_location_status():
     return status_obj
 
 
-class Phase2ModelTestCase(TestCase):
+class FloorPlanModelTestCase(TestCase):
     """Model constraints and validation."""
 
     def setUp(self):
@@ -46,43 +46,43 @@ class Phase2ModelTestCase(TestCase):
         self.other = LocationFactory(location_type=self.location_type, parent=None, status=status_obj)
 
     def test_location_placement_requires_strict_descendant(self):
-        location_map = LocationMap.objects.create(location=self.root, logical_width=100, logical_height=100)
-        placement = LocationPlacement(location_map=location_map, location=self.root, geometry=RECT)
+        floor_plan = FloorPlan.objects.create(location=self.root, logical_width=100, logical_height=100)
+        placement = LocationPlacement(floor_plan=floor_plan, location=self.root, geometry=RECT)
         with self.assertRaises(ValidationError):
             placement.full_clean()
         placement.location = self.child
         placement.full_clean()
 
     def test_exact_uniqueness_per_map_allows_same_target_on_different_maps(self):
-        root_map = LocationMap.objects.create(location=self.root, logical_width=100, logical_height=100)
-        child_map = LocationMap.objects.create(location=self.child, logical_width=100, logical_height=100)
-        LocationPlacement.objects.create(location_map=root_map, location=self.grandchild, geometry=RECT)
-        LocationPlacement.objects.create(location_map=child_map, location=self.grandchild, geometry=RECT)
-        duplicate = LocationPlacement(location_map=root_map, location=self.grandchild, geometry=RECT)
+        root_map = FloorPlan.objects.create(location=self.root, logical_width=100, logical_height=100)
+        child_map = FloorPlan.objects.create(location=self.child, logical_width=100, logical_height=100)
+        LocationPlacement.objects.create(floor_plan=root_map, location=self.grandchild, geometry=RECT)
+        LocationPlacement.objects.create(floor_plan=child_map, location=self.grandchild, geometry=RECT)
+        duplicate = LocationPlacement(floor_plan=root_map, location=self.grandchild, geometry=RECT)
         with self.assertRaises(ValidationError):
             duplicate.full_clean()
 
     def test_one_map_per_location(self):
-        LocationMap.objects.create(location=self.root, logical_width=100, logical_height=100)
-        duplicate = LocationMap(location=self.root, logical_width=100, logical_height=100)
+        FloorPlan.objects.create(location=self.root, logical_width=100, logical_height=100)
+        duplicate = FloorPlan(location=self.root, logical_width=100, logical_height=100)
         with self.assertRaises(ValidationError):
             duplicate.full_clean()
 
     def test_rack_placement_requires_owner_or_descendant_location(self):
-        location_map = LocationMap.objects.create(location=self.root, logical_width=100, logical_height=100)
+        floor_plan = FloorPlan.objects.create(location=self.root, logical_width=100, logical_height=100)
         owner_rack = RackFactory(location=self.root, status=self.root.status)
         child_rack = RackFactory(location=self.child, status=self.root.status)
-        RackPlacement(location_map=location_map, rack=owner_rack, x=1, y=1, width=10, height=10).full_clean()
-        RackPlacement(location_map=location_map, rack=child_rack, x=1, y=1, width=10, height=10).full_clean()
+        RackPlacement(floor_plan=floor_plan, rack=owner_rack, x=1, y=1, width=10, height=10).full_clean()
+        RackPlacement(floor_plan=floor_plan, rack=child_rack, x=1, y=1, width=10, height=10).full_clean()
         outside_rack = RackFactory(location=self.other, status=self.root.status)
-        placement = RackPlacement(location_map=location_map, rack=outside_rack, x=1, y=1, width=10, height=10)
+        placement = RackPlacement(floor_plan=floor_plan, rack=outside_rack, x=1, y=1, width=10, height=10)
         with self.assertRaises(ValidationError):
             placement.full_clean()
 
     def test_geometry_polygon_validation_cases(self):
-        location_map = LocationMap.objects.create(location=self.root, logical_width=100, logical_height=100)
+        floor_plan = FloorPlan.objects.create(location=self.root, logical_width=100, logical_height=100)
         valid = {"type": "polygon", "points": [[0, 0], [10, 0], [10, 10], [0, 10]]}
-        LocationPlacement(location_map=location_map, location=self.child, geometry=valid).full_clean()
+        LocationPlacement(floor_plan=floor_plan, location=self.child, geometry=valid).full_clean()
         invalid_geometries = [
             {"type": "polygon", "points": [[0, 0], [0, 0], [1, 1]]},
             {"type": "polygon", "points": [[0, 0], [1, 1], [2, 2]]},
@@ -95,15 +95,15 @@ class Phase2ModelTestCase(TestCase):
         ]
         for geometry in invalid_geometries:
             with self.subTest(geometry=geometry), self.assertRaises(ValidationError):
-                LocationPlacement(location_map=location_map, location=self.child, geometry=geometry).full_clean()
+                LocationPlacement(floor_plan=floor_plan, location=self.child, geometry=geometry).full_clean()
 
     def test_map_max_constraints_are_validated(self):
-        too_large = LocationMap(location=self.root, logical_width=1_000_001, logical_height=100)
+        too_large = FloorPlan(location=self.root, logical_width=1_000_001, logical_height=100)
         with self.assertRaises(ValidationError):
             too_large.full_clean()
 
 
-class Phase2ResolverTestCase(TestCase):
+class FloorPlanResolverTestCase(TestCase):
     """Resolver inheritance behavior."""
 
     def setUp(self):
@@ -115,50 +115,50 @@ class Phase2ResolverTestCase(TestCase):
         self.l4 = LocationFactory(location_type=location_type, parent=self.l3, status=status_obj)
 
     def test_own_map_wins(self):
-        own = LocationMap.objects.create(location=self.l4, logical_width=100, logical_height=100)
-        parent = LocationMap.objects.create(location=self.l3, logical_width=100, logical_height=100)
-        LocationPlacement.objects.create(location_map=parent, location=self.l4, geometry=RECT)
-        result = resolve_location_map(self.l4)
-        self.assertEqual(result.location_map, own)
+        own = FloorPlan.objects.create(location=self.l4, logical_width=100, logical_height=100)
+        parent = FloorPlan.objects.create(location=self.l3, logical_width=100, logical_height=100)
+        LocationPlacement.objects.create(floor_plan=parent, location=self.l4, geometry=RECT)
+        result = resolve_floor_plan(self.l4)
+        self.assertEqual(result.floor_plan, own)
         self.assertEqual(result.source, "own")
 
     def test_mandatory_inheritance_cases_and_stale_skip(self):
-        l1_map = LocationMap.objects.create(location=self.l1, logical_width=100, logical_height=100)
-        l2_map = LocationMap.objects.create(location=self.l2, logical_width=100, logical_height=100)
-        LocationMap.objects.create(location=self.l3, logical_width=100, logical_height=100)
-        LocationPlacement.objects.create(location_map=l1_map, location=self.l4, geometry=RECT)
-        LocationPlacement.objects.create(location_map=l2_map, location=self.l4, geometry=RECT)
-        self.assertEqual(resolve_location_map(self.l4).location_map, l2_map)
+        l1_map = FloorPlan.objects.create(location=self.l1, logical_width=100, logical_height=100)
+        l2_map = FloorPlan.objects.create(location=self.l2, logical_width=100, logical_height=100)
+        FloorPlan.objects.create(location=self.l3, logical_width=100, logical_height=100)
+        LocationPlacement.objects.create(floor_plan=l1_map, location=self.l4, geometry=RECT)
+        LocationPlacement.objects.create(floor_plan=l2_map, location=self.l4, geometry=RECT)
+        self.assertEqual(resolve_floor_plan(self.l4).floor_plan, l2_map)
         self.l4.parent = self.l1
         self.l4.validated_save()
-        self.assertEqual(resolve_location_map(self.l4).location_map, l1_map)
+        self.assertEqual(resolve_floor_plan(self.l4).floor_plan, l1_map)
 
     def test_nearest_ancestor_with_exact_placement_skips_intermediate_map(self):
-        distant = LocationMap.objects.create(location=self.l1, logical_width=100, logical_height=100)
-        LocationMap.objects.create(location=self.l3, logical_width=100, logical_height=100)
-        LocationPlacement.objects.create(location_map=distant, location=self.l4, geometry=RECT)
-        result = resolve_location_map(self.l4)
-        self.assertEqual(result.location_map, distant)
+        distant = FloorPlan.objects.create(location=self.l1, logical_width=100, logical_height=100)
+        FloorPlan.objects.create(location=self.l3, logical_width=100, logical_height=100)
+        LocationPlacement.objects.create(floor_plan=distant, location=self.l4, geometry=RECT)
+        result = resolve_floor_plan(self.l4)
+        self.assertEqual(result.floor_plan, distant)
         self.assertEqual(result.source, "ancestor")
 
     def test_no_implicit_focus(self):
-        LocationMap.objects.create(location=self.l1, logical_width=100, logical_height=100)
-        result = resolve_location_map(self.l4)
-        self.assertIsNone(result.location_map)
+        FloorPlan.objects.create(location=self.l1, logical_width=100, logical_height=100)
+        result = resolve_floor_plan(self.l4)
+        self.assertIsNone(result.floor_plan)
         self.assertEqual(result.source, "none")
 
     def test_direct_l1_to_l4_and_constant_query_count(self):
-        location_map = LocationMap.objects.create(location=self.l1, logical_width=100, logical_height=100)
-        LocationPlacement.objects.create(location_map=location_map, location=self.l4, geometry=RECT)
+        floor_plan = FloorPlan.objects.create(location=self.l1, logical_width=100, logical_height=100)
+        LocationPlacement.objects.create(floor_plan=floor_plan, location=self.l4, geometry=RECT)
         self.l4.refresh_from_db()
         self.l2.refresh_from_db()
         with self.assertNumQueries(5):
-            self.assertEqual(resolve_location_map(self.l4).location_map, location_map)
+            self.assertEqual(resolve_floor_plan(self.l4).floor_plan, floor_plan)
         with self.assertNumQueries(5):
-            self.assertEqual(resolve_location_map(self.l2).source, "none")
+            self.assertEqual(resolve_floor_plan(self.l2).source, "none")
 
 
-class Phase2MutationServiceTestCase(TestCase):
+class FloorPlanMutationServiceTestCase(TestCase):
     """Revision and permission basics."""
 
     def setUp(self):
@@ -171,7 +171,7 @@ class Phase2MutationServiceTestCase(TestCase):
 
     def test_permission_is_enforced(self):
         with self.assertRaises(PermissionDenied):
-            create_location_map(
+            create_floor_plan(
                 user=self.user,
                 location=self.location,
                 logical_width=100,
@@ -180,14 +180,14 @@ class Phase2MutationServiceTestCase(TestCase):
             )
 
     def test_revision_conflict_rolls_back(self):
-        location_map = LocationMap.objects.create(location=self.location, logical_width=100, logical_height=100)
+        floor_plan = FloorPlan.objects.create(location=self.location, logical_width=100, logical_height=100)
         self.user.is_superuser = True
         self.user.save()
         with self.assertRaises(ValidationError):
-            update_location_map(user=self.user, location_map=location_map, expected_revision=99, logical_width=200)
-        location_map.refresh_from_db()
-        self.assertEqual(location_map.revision, 1)
-        self.assertEqual(location_map.logical_width, 100)
+            update_floor_plan(user=self.user, floor_plan=floor_plan, expected_revision=99, logical_width=200)
+        floor_plan.refresh_from_db()
+        self.assertEqual(floor_plan.revision, 1)
+        self.assertEqual(floor_plan.logical_width, 100)
 
     def test_snapshot_stale_retained_explicit_delete_duplicate_replace_rollback_and_revision(self):
         user = self._superuser()
@@ -195,79 +195,79 @@ class Phase2MutationServiceTestCase(TestCase):
             location_type=self.location.location_type, parent=self.location, status=self.location.status
         )
         other = LocationFactory(location_type=self.location.location_type, parent=None, status=self.location.status)
-        location_map = LocationMap.objects.create(location=self.location, logical_width=100, logical_height=100)
-        stale = LocationPlacement.objects.create(location_map=location_map, location=child, geometry=RECT)
+        floor_plan = FloorPlan.objects.create(location=self.location, logical_width=100, logical_height=100)
+        stale = LocationPlacement.objects.create(floor_plan=floor_plan, location=child, geometry=RECT)
         child.parent = other
         child.validated_save()
-        snapshot = get_visible_snapshot(user=user, location_map=location_map)
+        snapshot = get_visible_snapshot(user=user, floor_plan=floor_plan)
         self.assertEqual(snapshot["location_placements"], [])
         self.assertEqual(snapshot["stale_location_placements"], [stale])
         replace_snapshot(
-            user=user, location_map=location_map, expected_revision=1, location_placements=[], rack_placements=[]
+            user=user, floor_plan=floor_plan, expected_revision=1, location_placements=[], rack_placements=[]
         )
         self.assertTrue(LocationPlacement.objects.filter(pk=stale.pk).exists())
-        location_map.refresh_from_db()
-        self.assertEqual(location_map.revision, 2)
+        floor_plan.refresh_from_db()
+        self.assertEqual(floor_plan.revision, 2)
         with self.assertRaises(RevisionConflict):
             replace_snapshot(
-                user=user, location_map=location_map, expected_revision=1, location_placements=[], rack_placements=[]
+                user=user, floor_plan=floor_plan, expected_revision=1, location_placements=[], rack_placements=[]
             )
         replace_snapshot(
             user=user,
-            location_map=location_map,
+            floor_plan=floor_plan,
             expected_revision=2,
             location_placements=[],
             rack_placements=[],
             delete_stale_ids=[stale.pk],
         )
         self.assertFalse(LocationPlacement.objects.filter(pk=stale.pk).exists())
-        location_map.refresh_from_db()
+        floor_plan.refresh_from_db()
         child.parent = self.location
         child.validated_save()
         with self.assertRaises(ValidationError):
             replace_snapshot(
                 user=user,
-                location_map=location_map,
+                floor_plan=floor_plan,
                 expected_revision=3,
                 location_placements=[{"location": child, "geometry": RECT}, {"location": child, "geometry": RECT}],
                 rack_placements=[],
             )
-        before = location_map.revision
+        before = floor_plan.revision
         with self.assertRaises(ValidationError):
             replace_snapshot(
                 user=user,
-                location_map=location_map,
+                floor_plan=floor_plan,
                 expected_revision=before,
                 location_placements=[
                     {"location": child, "geometry": {"type": "rectangle", "x": 99, "y": 0, "width": 2, "height": 1}}
                 ],
                 rack_placements=[],
             )
-        location_map.refresh_from_db()
-        self.assertEqual(location_map.revision, before)
+        floor_plan.refresh_from_db()
+        self.assertEqual(floor_plan.revision, before)
         replace_snapshot(
             user=user,
-            location_map=location_map,
+            floor_plan=floor_plan,
             expected_revision=before,
             location_placements=[{"location": child, "geometry": RECT}],
             rack_placements=[],
         )
-        location_map.refresh_from_db()
-        self.assertEqual(location_map.revision, before + 1)
+        floor_plan.refresh_from_db()
+        self.assertEqual(floor_plan.revision, before + 1)
 
     def test_shrink_rejection(self):
         user = self._superuser()
         child = LocationFactory(
             location_type=self.location.location_type, parent=self.location, status=self.location.status
         )
-        location_map = LocationMap.objects.create(location=self.location, logical_width=100, logical_height=100)
+        floor_plan = FloorPlan.objects.create(location=self.location, logical_width=100, logical_height=100)
         LocationPlacement.objects.create(
-            location_map=location_map,
+            floor_plan=floor_plan,
             location=child,
             geometry={"type": "rectangle", "x": 90, "y": 1, "width": 10, "height": 10},
         )
         with self.assertRaises(ValidationError):
-            update_location_map(user=user, location_map=location_map, expected_revision=1, logical_width=95)
+            update_floor_plan(user=user, floor_plan=floor_plan, expected_revision=1, logical_width=95)
 
     def test_available_descendants_filters_tree_placements_racks_and_permissions(self):
         user = self._superuser()
@@ -278,9 +278,9 @@ class Phase2MutationServiceTestCase(TestCase):
             location_type=self.location.location_type, parent=self.location, status=self.location.status
         )
         outside = LocationFactory(location_type=self.location.location_type, parent=None, status=self.location.status)
-        location_map = LocationMap.objects.create(location=self.location, logical_width=100, logical_height=100)
+        floor_plan = FloorPlan.objects.create(location=self.location, logical_width=100, logical_height=100)
         LocationPlacement.objects.create(
-            location_map=location_map,
+            floor_plan=floor_plan,
             location=placed_child,
             geometry=RECT,
         )
@@ -289,7 +289,7 @@ class Phase2MutationServiceTestCase(TestCase):
         placed_rack = RackFactory(location=child, status=self.location.status)
         outside_rack = RackFactory(location=outside, status=self.location.status)
         RackPlacement.objects.create(
-            location_map=location_map,
+            floor_plan=floor_plan,
             rack=placed_rack,
             x=1,
             y=1,
@@ -297,7 +297,7 @@ class Phase2MutationServiceTestCase(TestCase):
             height=10,
         )
 
-        locations, racks = available_descendants(location_map, user=user)
+        locations, racks = available_descendants(floor_plan, user=user)
         self.assertIn(child, locations)
         self.assertNotIn(self.location, locations)
         self.assertNotIn(placed_child, locations)
@@ -322,7 +322,7 @@ class Phase2MutationServiceTestCase(TestCase):
         )
         rack_permission.object_types.add(ContentType.objects.get_for_model(Rack))
         rack_permission.users.add(constrained)
-        restricted_locations, restricted_racks = available_descendants(location_map, user=constrained)
+        restricted_locations, restricted_racks = available_descendants(floor_plan, user=constrained)
         self.assertEqual(list(restricted_locations), [child])
         self.assertEqual(list(restricted_racks), [child_rack])
 
@@ -334,7 +334,7 @@ class Phase2ConcurrencyTestCase(TransactionTestCase):
         location_type = LocationTypeFactory(nestable=True, parent=None)
         location = LocationFactory(location_type=location_type, parent=None, status=make_location_status())
         user = get_user_model().objects.create_superuser(username="concurrency-root")
-        location_map = LocationMap.objects.create(location=location, logical_width=100, logical_height=100)
+        floor_plan = FloorPlan.objects.create(location=location, logical_width=100, logical_height=100)
         barrier = threading.Barrier(2)
         results = []
 
@@ -342,7 +342,7 @@ class Phase2ConcurrencyTestCase(TransactionTestCase):
             close_old_connections()
             try:
                 barrier.wait(timeout=10)
-                update_location_map(user=user, location_map=location_map, expected_revision=1, logical_width=width)
+                update_floor_plan(user=user, floor_plan=floor_plan, expected_revision=1, logical_width=width)
                 results.append("ok")
             except RevisionConflict:
                 results.append("conflict")
@@ -355,6 +355,6 @@ class Phase2ConcurrencyTestCase(TransactionTestCase):
         for thread in threads:
             thread.join(timeout=20)
         self.assertCountEqual(results, ["ok", "conflict"])
-        location_map.refresh_from_db()
-        self.assertEqual(location_map.revision, 2)
-        self.assertIn(location_map.logical_width, {200, 300})
+        floor_plan.refresh_from_db()
+        self.assertEqual(floor_plan.revision, 2)
+        self.assertIn(floor_plan.logical_width, {200, 300})

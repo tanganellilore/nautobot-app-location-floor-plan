@@ -31,7 +31,7 @@ class LocationFloorPlanViewContextTestCase(SimpleTestCase):
         request.user = SimpleNamespace(has_perm=lambda *args: True)
         location = SimpleNamespace(pk="00000000-0000-0000-0000-000000000001")
 
-        with patch("location_floor_plan.views.LocationMap.objects.filter") as mock_filter:
+        with patch("location_floor_plan.views.FloorPlan.objects.filter") as mock_filter:
             mock_filter.return_value.first.return_value = None
             context = LocationFloorPlanView().get_extra_context(request, location)
 

@@ -11,7 +11,7 @@ router = NautobotUIViewSetRouter()
 
 urlpatterns = [
     path("docs/", RedirectView.as_view(url=static("location_floor_plan/docs/index.html")), name="docs"),
-    path("location-maps/", views.LocationMapListView.as_view(), name="locationmap_list"),
+    path("floor-plans/", views.FloorPlanListView.as_view(), name="floorplan_list"),
     path("location/<uuid:pk>/location-floor-plan/", views.LocationFloorPlanView.as_view(), name="location_floor_plan"),
 ]
 

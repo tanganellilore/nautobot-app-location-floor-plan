@@ -6,7 +6,7 @@ Location Floor Plan adds a Location **Location Floor Plan** tab at `/plugins/loc
 
 Nautobot remains the source of truth. Location Floor Plan stores only:
 
-- `LocationMap`: one map canvas per owning Location.
+- `FloorPlan`: one map canvas per owning Location.
 - `LocationPlacement`: descendant Location geometry on a map.
 - `RackPlacement`: Rack rectangle on a map.
 

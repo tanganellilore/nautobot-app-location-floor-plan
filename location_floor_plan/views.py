@@ -5,19 +5,19 @@ from nautobot.core.views import generic
 from nautobot.dcim.models import Location
 from nautobot.apps.views import ObjectListView
 
-from location_floor_plan.api.filtersets import LocationMapFilterSet
+from location_floor_plan.api.filtersets import FloorPlanFilterSet
 from location_floor_plan.forms import PlacementPickerForm
-from location_floor_plan.models import LocationMap
-from location_floor_plan.tables import LocationMapTable
+from location_floor_plan.models import FloorPlan
+from location_floor_plan.tables import FloorPlanTable
 
 
-class LocationMapListView(ObjectListView):
+class FloorPlanListView(ObjectListView):
     """List locations that own a configured Location Floor Plan map."""
 
-    queryset = LocationMap.objects.select_related("location")
-    filterset = LocationMapFilterSet
-    filterset_class = LocationMapFilterSet
-    table = LocationMapTable
+    queryset = FloorPlan.objects.select_related("location")
+    filterset = FloorPlanFilterSet
+    filterset_class = FloorPlanFilterSet
+    table = FloorPlanTable
     action_buttons = ()
 
     def alter_queryset(self, request):
@@ -35,18 +35,18 @@ class LocationFloorPlanView(generic.ObjectView):
         api_resolved_url = reverse(
             "plugins-api:location_floor_plan-api:location-resolved-map", kwargs={"location_id": instance.pk}
         )
-        api_map_list_url = reverse("plugins-api:location_floor_plan-api:locationmap-list")
-        own_map = LocationMap.objects.filter(location=instance).first()
+        api_map_list_url = reverse("plugins-api:location_floor_plan-api:floorplan-list")
+        own_map = FloorPlan.objects.filter(location=instance).first()
         perms = {
-            "viewMap": request.user.has_perm("location_floor_plan.view_locationmap"),
-            "addMap": request.user.has_perm("location_floor_plan.add_locationmap")
+            "viewMap": request.user.has_perm("location_floor_plan.view_floorplan"),
+            "addMap": request.user.has_perm("location_floor_plan.add_floorplan")
             and request.user.has_perm("dcim.view_location", instance),
-            "changeMap": request.user.has_perm("location_floor_plan.change_locationmap", own_map)
+            "changeMap": request.user.has_perm("location_floor_plan.change_floorplan", own_map)
             if own_map
-            else request.user.has_perm("location_floor_plan.change_locationmap"),
-            "deleteMap": request.user.has_perm("location_floor_plan.delete_locationmap", own_map)
+            else request.user.has_perm("location_floor_plan.change_floorplan"),
+            "deleteMap": request.user.has_perm("location_floor_plan.delete_floorplan", own_map)
             if own_map
-            else request.user.has_perm("location_floor_plan.delete_locationmap"),
+            else request.user.has_perm("location_floor_plan.delete_floorplan"),
             "addLocationPlacement": request.user.has_perm("location_floor_plan.add_locationplacement"),
             "changeLocationPlacement": request.user.has_perm("location_floor_plan.change_locationplacement"),
             "deleteLocationPlacement": request.user.has_perm("location_floor_plan.delete_locationplacement"),

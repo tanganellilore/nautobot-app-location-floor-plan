@@ -19,7 +19,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name="LocationMap",
+            name="FloorPlan",
             fields=[
                 ("created", models.DateTimeField(auto_now_add=True, null=True)),
                 ("last_updated", models.DateTimeField(auto_now=True, null=True)),
@@ -64,8 +64,8 @@ class Migration(migrations.Migration):
                 ),
             ],
             options={
-                "verbose_name": "location map",
-                "verbose_name_plural": "location maps",
+                "verbose_name": "floor plan",
+                "verbose_name_plural": "floor plans",
                 "ordering": ["location__name"],
             },
             bases=(models.Model,),
@@ -96,11 +96,11 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
-                    "location_map",
+                    "floor_plan",
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="location_placements",
-                        to="location_floor_plan.locationmap",
+                        to="location_floor_plan.floorplan",
                     ),
                 ),
             ],
@@ -132,11 +132,11 @@ class Migration(migrations.Migration):
                 ("width", models.PositiveIntegerField(validators=[django.core.validators.MinValueValidator(1)])),
                 ("height", models.PositiveIntegerField(validators=[django.core.validators.MinValueValidator(1)])),
                 (
-                    "location_map",
+                    "floor_plan",
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="rack_placements",
-                        to="location_floor_plan.locationmap",
+                        to="location_floor_plan.floorplan",
                     ),
                 ),
                 (
@@ -156,40 +156,40 @@ class Migration(migrations.Migration):
             bases=(models.Model,),
         ),
         migrations.AddConstraint(
-            "locationmap",
+            "floorplan",
             models.CheckConstraint(condition=models.Q(("logical_width__gte", 1)), name="location_floor_plan_map_width_gte_1"),
         ),
         migrations.AddConstraint(
-            "locationmap",
+            "floorplan",
             models.CheckConstraint(
                 condition=models.Q(("logical_height__gte", 1)), name="location_floor_plan_map_height_gte_1"
             ),
         ),
         migrations.AddConstraint(
-            "locationmap",
+            "floorplan",
             models.CheckConstraint(
                 condition=models.Q(("logical_width__lte", 1000000)), name="location_floor_plan_map_width_lte_max"
             ),
         ),
         migrations.AddConstraint(
-            "locationmap",
+            "floorplan",
             models.CheckConstraint(
                 condition=models.Q(("logical_height__lte", 1000000)), name="location_floor_plan_map_height_lte_max"
             ),
         ),
         migrations.AddConstraint(
-            "locationmap",
+            "floorplan",
             models.CheckConstraint(condition=models.Q(("revision__gte", 1)), name="location_floor_plan_map_revision_gte_1"),
         ),
         migrations.AddConstraint(
             "locationplacement",
             models.UniqueConstraint(
-                fields=("location_map", "location"), name="location_floor_plan_unique_location_placement"
+                fields=("floor_plan", "location"), name="location_floor_plan_unique_location_placement"
             ),
         ),
         migrations.AddConstraint(
             "rackplacement",
-            models.UniqueConstraint(fields=("location_map", "rack"), name="location_floor_plan_unique_rack_placement"),
+            models.UniqueConstraint(fields=("floor_plan", "rack"), name="location_floor_plan_unique_rack_placement"),
         ),
         migrations.AddConstraint(
             "rackplacement",

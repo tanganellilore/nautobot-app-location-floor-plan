@@ -5,10 +5,10 @@ from django.urls import reverse
 from django.utils.html import format_html
 from nautobot.apps.tables import BaseTable
 
-from location_floor_plan.models import LocationMap
+from location_floor_plan.models import FloorPlan
 
 
-class LocationMapTable(BaseTable):
+class FloorPlanTable(BaseTable):
     """Native Nautobot table for locations that own Location Floor Plan maps."""
 
     location = tables.TemplateColumn(
@@ -22,7 +22,7 @@ class LocationMapTable(BaseTable):
     class Meta(BaseTable.Meta):
         """Table configuration."""
 
-        model = LocationMap
+        model = FloorPlan
         fields = ("location", "dimensions", "revision", "last_updated", "actions")
 
     def render_dimensions(self, record):

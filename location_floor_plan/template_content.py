@@ -8,10 +8,10 @@ class LocationFloorPlanTab(TemplateExtension):
     object_detail_tabs = [
         DistinctViewTab(
             tab_id="location-floor-plan",
-            label="Location Floor Plan",
+            label="Floor Plan",
             url_name="plugins:location_floor_plan:location_floor_plan",
             weight=500,
-            required_permissions=["location_floor_plan.view_locationmap"],
+            required_permissions=["location_floor_plan.view_floorplan"],
         )
     ]
 

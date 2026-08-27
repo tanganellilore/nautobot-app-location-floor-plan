@@ -6,14 +6,14 @@ from nautobot.apps.api import OrderedDefaultRouter
 from location_floor_plan.api import views
 
 router = OrderedDefaultRouter()
-router.register("location-maps", views.LocationMapViewSet)
+router.register("floor-plans", views.FloorPlanViewSet)
 router.register("location-placements", views.LocationPlacementViewSet)
 router.register("rack-placements", views.RackPlacementViewSet)
 
 urlpatterns = [
     path(
         "locations/<uuid:location_id>/resolved-map/",
-        views.ResolvedLocationMapView.as_view(),
+        views.ResolvedFloorPlanView.as_view(),
         name="location-resolved-map",
     )
 ]
