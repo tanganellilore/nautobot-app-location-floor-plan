@@ -19,7 +19,7 @@ class FloorPlanTable(BaseTable):
     dimensions = tables.Column(empty_values=(), verbose_name="Dimensions", orderable=False)
     actions = tables.Column(empty_values=(), verbose_name="", orderable=False)
 
-    class Meta(BaseTable.Meta):
+    class Meta(BaseTable.Meta):  # pylint: disable=too-few-public-methods
         """Table configuration."""
 
         model = FloorPlan

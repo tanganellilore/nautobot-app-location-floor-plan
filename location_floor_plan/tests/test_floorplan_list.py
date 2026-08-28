@@ -9,6 +9,7 @@ from nautobot.dcim.models import Location, Rack
 from nautobot.extras.models import Status
 
 from location_floor_plan.models import FloorPlan, LocationPlacement
+from location_floor_plan.navigation import menu_items
 
 
 class FloorPlanListViewTestCase(TestCase):
@@ -50,8 +51,6 @@ class FloorPlanListViewTestCase(TestCase):
         self.assertContains(response, map_url)
 
     def test_navigation_declares_organization_floor_plan_item(self):
-        from location_floor_plan.navigation import menu_items
-
         organization = menu_items[0]
         group = organization.groups[0]
         item = group.items[0]

@@ -95,6 +95,9 @@ class Command(BaseCommand):
 
     def _generate_static_data(self, db):
         """Generate static data required for test cases."""
+        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+        # This is an inherently orchestration-style management command that populates
+        # a broad set of related demo objects; splitting it would not improve clarity.
         device_content_type = ContentType.objects.db_manager(db).get_for_model(Device)
         rack_content_type = ContentType.objects.db_manager(db).get_for_model(Rack)
         power_panel_content_type = ContentType.objects.db_manager(db).get_for_model(PowerPanel)
