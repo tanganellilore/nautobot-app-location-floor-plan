@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("dcim", "0097_virtualdevicecontext_controller_managed_device_group"),
+        ("dcim", "0096_cablepath_add_fans_out_flags"),
         ("extras", "0145_objectmetadata_assigned_object_type_cascade"),
     ]
 
