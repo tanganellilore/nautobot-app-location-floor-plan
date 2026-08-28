@@ -618,9 +618,7 @@ def replace_background(*, user, floor_plan, expected_revision, upload):
     rack_placements = list(parent.rack_placements.select_related("rack", "rack__location").select_for_update())
 
     for placement in location_placements:
-        placement.geometry = _scale_geometry(
-            placement.geometry, old_width, old_height, new_width, new_height
-        )
+        placement.geometry = _scale_geometry(placement.geometry, old_width, old_height, new_width, new_height)
     for placement in rack_placements:
         placement.x, placement.y, placement.width, placement.height = _scale_rack_placement(
             placement.x,

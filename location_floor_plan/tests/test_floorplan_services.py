@@ -10,11 +10,11 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import close_old_connections
 from django.test import TestCase, TransactionTestCase
-from PIL import Image
 from nautobot.dcim.factory import LocationFactory, LocationTypeFactory, RackFactory
 from nautobot.dcim.models import Location, Rack
 from nautobot.extras.models import Status
 from nautobot.users.models import ObjectPermission
+from PIL import Image
 
 from location_floor_plan.models import FloorPlan, LocationPlacement, RackPlacement
 from location_floor_plan.services import (
