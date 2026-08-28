@@ -89,10 +89,12 @@
 
 /* Labels */
 .lfp-label {
+    font-family: var(--bs-body-font-family);
     font-weight: bold;
     text-align: center;
     font-size: 12px;
     color: var(--bs-body-color);
+    animation: lfpPopIn 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 
