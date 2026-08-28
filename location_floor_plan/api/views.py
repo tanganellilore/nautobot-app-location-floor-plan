@@ -97,6 +97,15 @@ class FloorPlanViewSet(NautobotModelViewSet):
             location__in=Location.objects.restrict(self.request.user, "view")
         )
 
+    def filter_queryset(self, queryset):
+        # The background endpoint serves the raw image file and is commonly requested with a
+        # cache-busting query string such as ``?v=<revision>``. ``get_object()`` calls
+        # ``filter_queryset()``, which would otherwise reject the unknown ``v`` parameter.
+        # Skip filtering for the background action only; list/detail filters remain strict.
+        if self.action == "background":
+            return queryset
+        return super().filter_queryset(queryset)
+
     def create(self, request, *args, **kwargs):
         if isinstance(request.data, list):
             raise ValidationError("Bulk creation is not supported.")

@@ -178,6 +178,22 @@ class FloorPlanAPITestCase(TestCase):
         self.assertEqual(floor_plan.revision, 2)
         self.assertEqual(self.client.get(background_url).status_code, status.HTTP_200_OK)
 
+    def test_background_ignores_cache_busting_query_param(self):
+        self.login()
+        floor_plan = FloorPlan.objects.create(location=self.root, logical_width=100, logical_height=100)
+        background_url = api_reverse("floorplan-background", {"pk": floor_plan.pk})
+        png = SimpleUploadedFile("floor.png", PNG_1X1, content_type="image/png")
+        response = self.client.put(background_url, {"background": png}, format="multipart", HTTP_IF_MATCH='"1"')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+
+        response = self.client.get(background_url, {"v": "7"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(response["Content-Type"], "image/png")
+
+        # Normal detail/list endpoints still enforce unknown query parameter rejection.
+        detail_url = api_reverse("floorplan-detail", {"pk": floor_plan.pk})
+        self.assertEqual(self.client.get(detail_url, {"v": "7"}).status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_anonymous_and_unprivileged_requests_do_not_leak_records(self):
         floor_plan = FloorPlan.objects.create(location=self.root, logical_width=100, logical_height=100)
         list_url = api_reverse("floorplan-list")
