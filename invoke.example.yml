@@ -1,0 +1,16 @@
+---
+location_floor_plan:
+  nautobot_ver: "3.2.3"
+  python_ver: "3.12"
+  # local: false
+  # ephemeral_ports: false
+  # compose_dir: "/full/path/to/nautobot-app-location-floor-plan/development"
+
+# The following is an example of using MySQL as the database backend
+# ---
+# location_floor_plan:
+#   compose_files:
+#     - "docker-compose.base.yml"
+#     - "docker-compose.redis.yml"
+#     - "docker-compose.mysql.yml"
+#     - "docker-compose.dev.yml"
