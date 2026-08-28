@@ -54,6 +54,9 @@
     let sharedViewTooltipOwner = null;
     let sharedViewTooltipHideTimer = null;
 
+    let sharedContextTooltip = null;
+    let sharedContextTooltipLayer = null;
+
     
     function getThemeColor() {
         if (typeof document === 'undefined' || !document.body) return '';
@@ -116,10 +119,7 @@
     }
 
     function closeContextAction() {
-        if (contextActionLayer) {
-            contextActionLayer.closeTooltip();
-            contextActionLayer.unbindTooltip();
-        }
+        closeContextTooltip();
         contextActionLayer = null;
     }
 
@@ -236,6 +236,34 @@
         }, 0);
     }
 
+    function openContextTooltip(layer, content) {
+        const placement = getTooltipPlacement(layer, 'top');
+        if (!placement.anchorLatLng || !map) return;
+
+        if (!sharedContextTooltip) {
+            sharedContextTooltip = L.tooltip({
+                permanent: true,
+                interactive: true,
+                direction: placement.direction,
+                offset: placement.offset,
+                className: 'lfp-map-tooltip-surface lfp-action-tooltip'
+            }).setContent(content);
+        } else {
+            sharedContextTooltip.setContent(content);
+            sharedContextTooltip.options.direction = placement.direction;
+            sharedContextTooltip.options.offset = placement.offset;
+        }
+        sharedContextTooltip.setLatLng(placement.anchorLatLng).addTo(map);
+        sharedContextTooltipLayer = layer;
+    }
+
+    function closeContextTooltip() {
+        if (sharedContextTooltip) {
+            sharedContextTooltip.remove();
+        }
+        sharedContextTooltipLayer = null;
+    }
+
     function cacheBustUrl(url, token) {
         if (!url) return url;
         const sep = url.includes('?') ? '&' : '?';
@@ -260,14 +288,7 @@
     }
 
     function openContextActionTooltip(layer, panel) {
-        const placement = getTooltipPlacement(layer, 'top');
-        if (!placement.anchorLatLng) return;
-
-        bindSmartTooltip(layer, panel, {
-            permanent: true,
-            interactive: true,
-            className: 'lfp-map-tooltip-surface lfp-action-tooltip'
-        }).openTooltip(placement.anchorLatLng);
+        openContextTooltip(layer, panel);
     }
 
     async function getPlacementCandidates(type, activeTargetId = null) {
@@ -353,7 +374,6 @@
             if (map) {
                 openContextActionTooltip(selectedLayer, panel);
                 contextActionLayer = selectedLayer;
-                contextAction = selectedLayer.getTooltip();
 
                 selectedLayer.on('pm:dragstart', closeContextAction);
                 selectedLayer.on('pm:markerdragstart', closeContextAction);
@@ -676,7 +696,7 @@
         }
     }
 
-    async function loadMapData() {
+    async function loadMapData(resumeEditMode = false) {
         setUIState('loading');
         try {
             const response = await fetch(config.apiResolvedUrl, {
@@ -736,6 +756,9 @@
             }
             
             renderMap();
+            if (resumeEditMode && config.hasEditPermission && mapData && !mapData.inherited) {
+                enableEditModeControls();
+            }
         } catch (e) {
             console.error(e);
             setUIState('error', "Error loading map: " + e.message);
@@ -747,6 +770,10 @@
         if (map) map.remove();
         closeSharedViewTooltip();
         sharedViewTooltip = null;
+        closeContextTooltip();
+        sharedContextTooltip = null;
+        contextActionLayer = null;
+        selectedLayer = null;
 
         const logicalWidth = mapData.map.logical_width || 1000;
         const logicalHeight = mapData.map.logical_height || 1000;
@@ -942,24 +969,26 @@
         });
     }
 
-    function toggleEditMode() {
-        if (mapData && mapData.inherited) return;
-        if (!map) return;
+    function enableEditModeControls() {
+        if (!map || (mapData && mapData.inherited)) return;
         isEditMode = true;
         setUIState('edit');
-        
-        map.pm.addControls({
-            position: 'topleft',
-            drawMarker: false, drawCircleMarker: false, drawPolyline: false, drawRectangle: false,
-            drawPolygon: false, drawText: false, drawCircle: false,
-            editMode: true, dragMode: true, cutPolygon: false, removalMode: false
-        });
-        const c = getThemeColor();
-        map.pm.setGlobalOptions({
-            templineStyle: { color: c, weight: 3, dashArray: "5,5" },
-            hintlineStyle: { color: c, weight: 3, dashArray: "5,5" },
-            pathOptions: { color: c, weight: 3, fillColor: c, fillOpacity: 0.1 }
-        });
+
+        const existingToolbar = map.getContainer().querySelector('.leaflet-pm-toolbar');
+        if (!existingToolbar) {
+            map.pm.addControls({
+                position: 'topleft',
+                drawMarker: false, drawCircleMarker: false, drawPolyline: false, drawRectangle: false,
+                drawPolygon: false, drawText: false, drawCircle: false,
+                editMode: true, dragMode: true, cutPolygon: false, removalMode: false
+            });
+            const c = getThemeColor();
+            map.pm.setGlobalOptions({
+                templineStyle: { color: c, weight: 3, dashArray: "5,5" },
+                hintlineStyle: { color: c, weight: 3, dashArray: "5,5" },
+                pathOptions: { color: c, weight: 3, fillColor: c, fillOpacity: 0.1 }
+            });
+        }
 
         // Hide Geoman default toolbar to force use of our buttons
         const geomanToolbar = document.querySelector('.leaflet-pm-toolbar');
@@ -967,10 +996,19 @@
 
         closeSharedViewTooltip();
         sharedViewTooltip = null;
+        closeContextTooltip();
+        sharedContextTooltip = null;
+        contextActionLayer = null;
 
-        drawObjects();
         setDrawMode(null);
         selectLayer(null);
+    }
+
+    function toggleEditMode() {
+        if (mapData && mapData.inherited) return;
+        if (!map) return;
+        enableEditModeControls();
+        drawObjects();
     }
 
     function cancelEdit() {
@@ -1169,13 +1207,14 @@
         if (mapData && mapData.inherited) return;
         const file = event.target.files && event.target.files[0];
         if (!file || !mapData || !mapData.map) return;
+        const wasEditMode = isEditMode;
         const formData = new FormData();
         formData.append('background', file);
         formData.append('expected_revision', originalRevision);
         try {
             const response = await fetch(mapActionUrl(mapData.map.id, 'background'), {method: 'PUT', headers: {'Accept': 'application/json', 'X-CSRFToken': config.csrfToken, 'If-Match': String(originalRevision)}, body: formData});
             if (!response.ok) throw new Error(await response.text());
-            await loadMapData();
+            await loadMapData(wasEditMode);
         } catch (e) {
             showAlert("Error", "Background upload failed: " + e.message);
         }
