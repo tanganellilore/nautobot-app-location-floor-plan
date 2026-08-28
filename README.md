@@ -135,6 +135,33 @@ Required examples:
 6. Use the picker to add descendant Locations and Racks.
 7. Draw/edit shapes with Leaflet/Geoman, save the snapshot, then reload to confirm the revision advanced.
 
+### Visual walkthrough
+
+Open a Location page and choose **Location Floor Plan** from the menu.
+
+![Location page menu with the Location Floor Plan option highlighted](docs/images/floor-plan-menu.png)
+*The Location Floor Plan entry in the Location page menu.*
+
+Select **Add** to create a new floor plan.
+
+![Add floor plan dialog with width and height fields](docs/images/floor-plan-addfloor.png)
+*The Add floor plan dialog, where you set the logical width and height.*
+
+In the editor, use the rack picker to place a Rack on the map.
+
+![Floor plan editor showing the rack picker and a rack being added](docs/images/floor-plan-editor-addrack.png)
+*Adding a rack from the picker onto the floor plan canvas.*
+
+Hover over a placed rack to see its live utilization tooltip.
+
+![Floor plan editor tooltip showing rack utilization details](docs/images/floor-plan-editor-tooltip.png)
+*Editor tooltip with live rack utilization details.*
+
+The same tooltip appears when viewing a saved floor plan.
+
+![Floor plan view tooltip showing rack utilization details](docs/images/floor-plan-view-tooltip.png)
+*View-mode tooltip showing rack utilization details.*
+
 ## Editor workflow
 
 The UI is available at `/plugins/location-floor-plan/location/<location-uuid>/location-floor-plan/` as a Location tab. The editor loads the resolved payload, lists available descendants from the picker endpoint, draws Location polygons/rectangles and Rack rectangles, and saves a full snapshot. Concurrent saves are protected with revision headers.
