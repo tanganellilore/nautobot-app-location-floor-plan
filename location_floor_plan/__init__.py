@@ -5,7 +5,7 @@ from importlib import metadata
 
 from nautobot.apps import NautobotAppConfig
 
-__version__ = metadata.version(__name__)
+__version__ = metadata.version("nautobot-location-floor-plan")
 
 
 class LocationFloorPlanConfig(NautobotAppConfig):
