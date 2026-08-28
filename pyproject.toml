@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nautobot-location-floor-plan"
-version = "0.1.0"
+version = "1.0.0"
 description = "Interactive physical hierarchy maps for Nautobot Locations and Racks"
 authors = ["Lorenzo Tanganelli <lorenzo.tanganelli@staff.aruba.it>"]
 license = "Apache-2.0"
@@ -180,7 +180,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.towncrier]
 package = "location_floor_plan"
 directory = "changes"
-filename = "docs/admin/release_notes/version_X.Y.md"
+filename = "docs/admin/release_notes/version_1.0.md"
 template = "development/towncrier_template.j2"
 start_string = "<!-- towncrier release notes start -->"
 issue_format = "[#{issue}](https://github.com/location-floor-plan/nautobot-app-location-floor-plan/issues/{issue})"
