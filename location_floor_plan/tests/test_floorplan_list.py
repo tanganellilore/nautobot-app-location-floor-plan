@@ -37,7 +37,7 @@ class FloorPlanListViewTestCase(TestCase):
         )
 
     def test_url_reverses_and_lists_only_locations_that_own_maps(self):
-        response = self.client.get(reverse("plugins:location_floor_plan:floorplan_list"))
+        response = self.client.get("/plugins/location-floor-plan/floor-plans/", HTTP_HX_REQUEST="true")
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Owner With Map")
@@ -45,7 +45,7 @@ class FloorPlanListViewTestCase(TestCase):
         self.assertNotContains(response, "No Own Map")
 
     def test_location_row_links_to_existing_location_floor_plan_route(self):
-        response = self.client.get(reverse("plugins:location_floor_plan:floorplan_list"))
+        response = self.client.get("/plugins/location-floor-plan/floor-plans/", HTTP_HX_REQUEST="true")
         map_url = reverse("plugins:location_floor_plan:location_floor_plan", kwargs={"pk": self.owner.pk})
 
         self.assertContains(response, map_url)
@@ -58,5 +58,5 @@ class FloorPlanListViewTestCase(TestCase):
         self.assertEqual(organization.name, "Organization")
         self.assertEqual(group.name, "Locations")
         self.assertEqual(item.name, "Floor Plans")
-        self.assertEqual(item.link, "plugins:location_floor_plan:floorplan_list")
+        self.assertEqual(item.link, "/plugins/location-floor-plan/floor-plans/")
         self.assertIn("location_floor_plan.view_floorplan", item.permissions)
