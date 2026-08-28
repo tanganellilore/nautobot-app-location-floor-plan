@@ -2,12 +2,15 @@
 # pylint: disable=missing-function-docstring,missing-class-docstring,too-many-locals
 
 import threading
+from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import close_old_connections
 from django.test import TestCase, TransactionTestCase
+from PIL import Image
 from nautobot.dcim.factory import LocationFactory, LocationTypeFactory, RackFactory
 from nautobot.dcim.models import Location, Rack
 from nautobot.extras.models import Status
@@ -19,6 +22,7 @@ from location_floor_plan.services import (
     available_descendants,
     create_floor_plan,
     get_visible_snapshot,
+    replace_background,
     replace_snapshot,
     resolve_floor_plan,
     update_floor_plan,
@@ -358,3 +362,124 @@ class Phase2ConcurrencyTestCase(TransactionTestCase):
         floor_plan.refresh_from_db()
         self.assertEqual(floor_plan.revision, 2)
         self.assertIn(floor_plan.logical_width, {200, 300})
+
+
+class ReplaceBackgroundServiceTestCase(TestCase):
+    """Background replacement rescales map dimensions and placements."""
+
+    def setUp(self):
+        location_type = LocationTypeFactory(nestable=True, parent=None)
+        self.location = LocationFactory(location_type=location_type, parent=None, status=make_location_status())
+        self.child = LocationFactory(location_type=location_type, parent=self.location, status=self.location.status)
+        self.rack = RackFactory(location=self.location, status=self.location.status)
+        self.user = get_user_model().objects.create_superuser(username="replace-bg-root")
+
+    def _png_upload(self, width, height):
+        image = Image.new("RGBA", (width, height), (255, 255, 255, 255))
+        out = BytesIO()
+        image.save(out, format="PNG")
+        return SimpleUploadedFile("bg.png", out.getvalue(), content_type="image/png")
+
+    def test_replace_background_scales_rectangles_racks_non_uniformly(self):
+        floor_plan = FloorPlan.objects.create(location=self.location, logical_width=100, logical_height=100)
+        loc = LocationPlacement.objects.create(
+            floor_plan=floor_plan,
+            location=self.child,
+            geometry={"type": "rectangle", "x": 10, "y": 20, "width": 30, "height": 40},
+        )
+        rack = RackPlacement.objects.create(floor_plan=floor_plan, rack=self.rack, x=5, y=6, width=20, height=30)
+
+        replace_background(
+            user=self.user,
+            floor_plan=floor_plan,
+            expected_revision=1,
+            upload=self._png_upload(200, 50),
+        )
+
+        floor_plan.refresh_from_db()
+        self.assertEqual(floor_plan.logical_width, 200)
+        self.assertEqual(floor_plan.logical_height, 50)
+        self.assertEqual(floor_plan.revision, 2)
+
+        loc.refresh_from_db()
+        self.assertEqual(
+            loc.geometry,
+            {"type": "rectangle", "x": 20, "y": 10, "width": 60, "height": 20},
+        )
+
+        rack.refresh_from_db()
+        self.assertEqual(rack.x, 10)
+        self.assertEqual(rack.y, 3)
+        self.assertEqual(rack.width, 40)
+        self.assertEqual(rack.height, 15)
+        self.assertLessEqual(rack.x + rack.width, floor_plan.logical_width)
+        self.assertLessEqual(rack.y + rack.height, floor_plan.logical_height)
+
+    def test_replace_background_scales_polygon_and_clamps_to_bounds(self):
+        floor_plan = FloorPlan.objects.create(location=self.location, logical_width=100, logical_height=100)
+        LocationPlacement.objects.create(
+            floor_plan=floor_plan,
+            location=self.child,
+            geometry={"type": "polygon", "points": [[0, 0], [50, 0], [50, 50], [0, 50]]},
+        )
+        rack = RackPlacement.objects.create(floor_plan=floor_plan, rack=self.rack, x=90, y=90, width=10, height=10)
+
+        replace_background(
+            user=self.user,
+            floor_plan=floor_plan,
+            expected_revision=1,
+            upload=self._png_upload(50, 30),
+        )
+
+        floor_plan.refresh_from_db()
+        self.assertEqual(floor_plan.logical_width, 50)
+        self.assertEqual(floor_plan.logical_height, 30)
+
+        loc = LocationPlacement.objects.get(floor_plan=floor_plan, location=self.child)
+        self.assertEqual(loc.geometry["type"], "polygon")
+        self.assertEqual(loc.geometry["points"], [[0, 0], [25, 0], [25, 15], [0, 15]])
+
+        rack.refresh_from_db()
+        self.assertLessEqual(rack.x + rack.width, floor_plan.logical_width)
+        self.assertLessEqual(rack.y + rack.height, floor_plan.logical_height)
+
+    def test_replace_background_clamps_rack_when_shrinking_below_bounds(self):
+        floor_plan = FloorPlan.objects.create(location=self.location, logical_width=100, logical_height=100)
+        rack = RackPlacement.objects.create(floor_plan=floor_plan, rack=self.rack, x=95, y=95, width=5, height=5)
+
+        replace_background(
+            user=self.user,
+            floor_plan=floor_plan,
+            expected_revision=1,
+            upload=self._png_upload(10, 10),
+        )
+
+        floor_plan.refresh_from_db()
+        self.assertEqual(floor_plan.logical_width, 10)
+        self.assertEqual(floor_plan.logical_height, 10)
+
+        rack.refresh_from_db()
+        self.assertGreaterEqual(rack.width, 1)
+        self.assertGreaterEqual(rack.height, 1)
+        self.assertLessEqual(rack.x + rack.width, floor_plan.logical_width)
+        self.assertLessEqual(rack.y + rack.height, floor_plan.logical_height)
+
+    def test_replace_background_revision_conflict_rolls_back(self):
+        floor_plan = FloorPlan.objects.create(location=self.location, logical_width=100, logical_height=100)
+        LocationPlacement.objects.create(floor_plan=floor_plan, location=self.child, geometry=RECT)
+        RackPlacement.objects.create(floor_plan=floor_plan, rack=self.rack, x=1, y=1, width=10, height=10)
+
+        with self.assertRaises(RevisionConflict):
+            replace_background(
+                user=self.user,
+                floor_plan=floor_plan,
+                expected_revision=99,
+                upload=self._png_upload(200, 200),
+            )
+
+        floor_plan.refresh_from_db()
+        self.assertEqual(floor_plan.logical_width, 100)
+        self.assertEqual(floor_plan.logical_height, 100)
+        self.assertEqual(floor_plan.revision, 1)
+        self.assertEqual(LocationPlacement.objects.filter(floor_plan=floor_plan).count(), 1)
+        self.assertEqual(RackPlacement.objects.filter(floor_plan=floor_plan).count(), 1)

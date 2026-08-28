@@ -563,17 +563,102 @@ def _rasterize_svg(data):
     return cairosvg.svg2png(bytestring=ElementTree.tostring(root), unsafe=False)
 
 
+def _scale_geometry(geometry, old_width, old_height, new_width, new_height):
+    """Scale a rectangle or polygon placement geometry to new map dimensions."""
+    scale_x = new_width / old_width
+    scale_y = new_height / old_height
+    geometry_type = geometry.get("type")
+    if geometry_type == "rectangle":
+        width = max(1, min(round(geometry["width"] * scale_x), new_width))
+        height = max(1, min(round(geometry["height"] * scale_y), new_height))
+        x = max(0, min(round(geometry["x"] * scale_x), new_width - width))
+        y = max(0, min(round(geometry["y"] * scale_y), new_height - height))
+        return {"type": "rectangle", "x": x, "y": y, "width": width, "height": height}
+    if geometry_type == "polygon":
+        points = [
+            [
+                max(0, min(round(point[0] * scale_x), new_width)),
+                max(0, min(round(point[1] * scale_y), new_height)),
+            ]
+            for point in geometry["points"]
+        ]
+        return {"type": "polygon", "points": points}
+    return geometry
+
+
+def _scale_rack_placement(x, y, width, height, old_width, old_height, new_width, new_height):
+    """Scale a rack placement rectangle to new map dimensions, clamping to bounds."""
+    scale_x = new_width / old_width
+    scale_y = new_height / old_height
+    width = max(1, min(round(width * scale_x), new_width))
+    height = max(1, min(round(height * scale_y), new_height))
+    x = max(0, min(round(x * scale_x), new_width - width))
+    y = max(0, min(round(y * scale_y), new_height - height))
+    return x, y, width, height
+
+
 @transaction.atomic
 def replace_background(*, user, floor_plan, expected_revision, upload):
+    """Replace the background image and rescale existing placements to the new dimensions."""
     parent = FloorPlan.objects.select_for_update().get(pk=floor_plan.pk)
     _check(user, "location_floor_plan.change_floorplan", parent)
     _assert_revision(parent, expected_revision)
+
     png = normalize_background_upload(upload)
+    with Image.open(BytesIO(png)) as image:
+        new_width = image.width
+        new_height = image.height
+
+    old_width = parent.logical_width
+    old_height = parent.logical_height
+    parent.logical_width = new_width
+    parent.logical_height = new_height
+
+    location_placements = list(parent.location_placements.select_related("location").select_for_update())
+    rack_placements = list(parent.rack_placements.select_related("rack", "rack__location").select_for_update())
+
+    for placement in location_placements:
+        placement.geometry = _scale_geometry(
+            placement.geometry, old_width, old_height, new_width, new_height
+        )
+    for placement in rack_placements:
+        placement.x, placement.y, placement.width, placement.height = _scale_rack_placement(
+            placement.x,
+            placement.y,
+            placement.width,
+            placement.height,
+            old_width,
+            old_height,
+            new_width,
+            new_height,
+        )
+
+    parent.full_clean()
+    for placement in location_placements:
+        placement.floor_plan = parent
+        placement.full_clean()
+    for placement in rack_placements:
+        placement.floor_plan = parent
+        placement.full_clean()
+
     old_name = parent.background.name if parent.background else None
     parent.background.save(f"{uuid4().hex}.png", ContentFile(png), save=False)
-    _bump(parent)
+    parent.revision += 1
+    parent.save(
+        update_fields=[
+            "background",
+            "logical_width",
+            "logical_height",
+            "revision",
+            "last_updated",
+        ]
+    )
+    for placement in location_placements:
+        placement.save()
+    for placement in rack_placements:
+        placement.save()
+
     _assert_restricted(user, "change", parent)
-    parent.save(update_fields=["background", "revision", "last_updated"])
     if old_name:
         transaction.on_commit(lambda: default_storage.delete(old_name))
     return parent
