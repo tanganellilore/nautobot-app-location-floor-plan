@@ -4,6 +4,9 @@
 
 The tab loads `GET /api/plugins/location-floor-plan/locations/{location_id}/resolved-map/`, renders the inherited or own map, and uses `GET /api/plugins/location-floor-plan/floor-plans/{id}/descendants/` as the picker for unused child Locations and Racks. A save sends `PUT /api/plugins/location-floor-plan/floor-plans/{id}/snapshot/` with the current revision.
 
+![Floor plan editor tooltip showing rack utilization details](../images/floor-plan-editor-tooltip.png)
+*Hover over a placed Rack while editing to preview live utilization details.*
+
 ## REST endpoints
 
 | Endpoint | Use |
