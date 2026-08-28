@@ -11,8 +11,7 @@ from location_floor_plan.models import FloorPlan
 class FloorPlanTable(BaseTable):
     """Native Nautobot table for locations that own Location Floor Plan maps."""
 
-    location = tables.TemplateColumn(
-        template_code="<a href=\"{% url 'plugins:location_floor_plan:location_floor_plan' pk=record.location.pk %}\">{{ record.location }}</a>",
+    location = tables.Column(
         verbose_name="Location",
         order_by="location__name",
     )
@@ -24,6 +23,11 @@ class FloorPlanTable(BaseTable):
 
         model = FloorPlan
         fields = ("location", "dimensions", "revision", "last_updated", "actions")
+
+    def render_location(self, record):
+        """Render location name as a direct link to its floor plan view."""
+        url = reverse("plugins:location_floor_plan:location_floor_plan", kwargs={"pk": record.location.pk})
+        return format_html('<a href="{}">{}</a>', url, record.location)
 
     def render_dimensions(self, record):
         """Render logical dimensions compactly."""

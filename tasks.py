@@ -259,7 +259,7 @@ def _ensure_creds_env_file(context):
     """Ensure that the development/creds.env file exists."""
     if not os.path.exists(os.path.join(context.location_floor_plan.compose_dir, "creds.env")):
         # Warn the user that the creds.env file does not exist and that we are copying the example file to it
-        print("The creds.env file does not exist, using the example file to create it. ⚠️⚠️")
+        print("The creds.env file does not exist, using the example file to create it.")
         # Copy the creds.example.env file to creds.env
         shutil.copy(
             os.path.join(context.location_floor_plan.compose_dir, "creds.example.env"),
