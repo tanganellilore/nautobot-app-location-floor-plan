@@ -50,6 +50,10 @@
     let selectedLayer = null; // The selected location/rack from picker
     let bgImageLoadPromise = null;
 
+    let sharedViewTooltip = null;
+    let sharedViewTooltipOwner = null;
+    let sharedViewTooltipHideTimer = null;
+
     
     function getThemeColor() {
         if (typeof document === 'undefined' || !document.body) return '';
@@ -185,6 +189,59 @@
         };
     }
 
+    function getOrCreateSharedViewTooltip(options) {
+        if (!sharedViewTooltip) {
+            sharedViewTooltip = L.tooltip({
+                ...options,
+                permanent: false,
+                interactive: false
+            });
+        }
+        return sharedViewTooltip;
+    }
+
+    function closeSharedViewTooltip() {
+        if (sharedViewTooltipHideTimer) {
+            clearTimeout(sharedViewTooltipHideTimer);
+            sharedViewTooltipHideTimer = null;
+        }
+        if (sharedViewTooltip) {
+            sharedViewTooltip.remove();
+        }
+        sharedViewTooltipOwner = null;
+    }
+
+    function openSharedViewTooltip(layer, content, options) {
+        const placement = getTooltipPlacement(layer, options.direction || 'top');
+        if (!placement.anchorLatLng || !map) return;
+
+        const tooltip = getOrCreateSharedViewTooltip(options);
+        if (sharedViewTooltipHideTimer) {
+            clearTimeout(sharedViewTooltipHideTimer);
+            sharedViewTooltipHideTimer = null;
+        }
+
+        tooltip.setContent(content);
+        tooltip.options.direction = placement.direction;
+        tooltip.options.offset = placement.offset;
+        tooltip.setLatLng(placement.anchorLatLng).addTo(map);
+        sharedViewTooltipOwner = layer;
+    }
+
+    function closeSharedViewTooltipForLayer(layer) {
+        if (sharedViewTooltipOwner !== layer) return;
+        if (sharedViewTooltipHideTimer) clearTimeout(sharedViewTooltipHideTimer);
+        sharedViewTooltipHideTimer = setTimeout(() => {
+            closeSharedViewTooltip();
+        }, 0);
+    }
+
+    function cacheBustUrl(url, token) {
+        if (!url) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}v=${encodeURIComponent(token)}`;
+    }
+
     function bindSmartTooltip(layer, content, options = {}) {
         const placement = getTooltipPlacement(layer, options.direction || 'top');
         if (options.permanent) {
@@ -195,22 +252,11 @@
             });
         }
 
-        const tooltip = L.tooltip({
-            ...options,
-            direction: placement.direction,
-            offset: placement.offset
-        }).setContent(content);
-        const openTooltip = () => {
-            const hoverPlacement = getTooltipPlacement(layer, options.direction || 'top');
-            if (!hoverPlacement.anchorLatLng || !map) return;
-            tooltip.options.direction = hoverPlacement.direction;
-            tooltip.options.offset = hoverPlacement.offset;
-            tooltip.setLatLng(hoverPlacement.anchorLatLng).addTo(map);
-        };
-        const closeTooltip = () => tooltip.remove();
+        const openTooltip = () => openSharedViewTooltip(layer, content, options);
+        const closeTooltip = () => closeSharedViewTooltipForLayer(layer);
         layer.on('mouseover', openTooltip);
         layer.on('mouseout', closeTooltip);
-        return tooltip;
+        return sharedViewTooltip;
     }
 
     function openContextActionTooltip(layer, panel) {
@@ -699,6 +745,8 @@
     function renderMap() {
         if (backgroundLayer) backgroundLayer.remove();
         if (map) map.remove();
+        closeSharedViewTooltip();
+        sharedViewTooltip = null;
 
         const logicalWidth = mapData.map.logical_width || 1000;
         const logicalHeight = mapData.map.logical_height || 1000;
@@ -724,7 +772,9 @@
         const bounds = [[0, 0], [logicalHeight, logicalWidth]];
         backgroundLayer = null;
         if (mapData.map.background_url) {
-            backgroundLayer = L.imageOverlay(mapData.map.background_url, bounds, { pane: 'backgroundPane' }).addTo(map);
+            const bgToken = mapData.map.revision || originalRevision || Date.now();
+            const bgUrl = cacheBustUrl(mapData.map.background_url, bgToken);
+            backgroundLayer = L.imageOverlay(bgUrl, bounds, { pane: 'backgroundPane' }).addTo(map);
         }
 
         locationLayerGroup = L.layerGroup().addTo(map);
@@ -914,6 +964,9 @@
         // Hide Geoman default toolbar to force use of our buttons
         const geomanToolbar = document.querySelector('.leaflet-pm-toolbar');
         if (geomanToolbar) geomanToolbar.style.display = 'none';
+
+        closeSharedViewTooltip();
+        sharedViewTooltip = null;
 
         drawObjects();
         setDrawMode(null);
