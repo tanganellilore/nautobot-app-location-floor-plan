@@ -580,9 +580,9 @@
         const imageDimensionsNote = document.getElementById('lfp-image-dimensions-note');
         if (!toggle || !checkbox || !fields) return;
 
-        toggle.classList.toggle('lfp-hidden', !hasBackground);
-        if (!hasBackground) checkbox.checked = true;
-        fields.classList.toggle('lfp-hidden', hasBackground && !checkbox.checked);
+        toggle.classList.remove('lfp-hidden');
+        if (!hasBackground) checkbox.checked = false;
+        fields.classList.toggle('lfp-hidden', !checkbox.checked);
         imageDimensionsNote?.classList.toggle('lfp-hidden', !hasBackground || checkbox.checked);
     }
 
