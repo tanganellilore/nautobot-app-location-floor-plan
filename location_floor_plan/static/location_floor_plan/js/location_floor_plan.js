@@ -577,11 +577,13 @@
         const toggle = document.getElementById('lfp-custom-dimensions-toggle');
         const checkbox = document.getElementById('lfp-custom-dimensions');
         const fields = document.getElementById('lfp-custom-dimensions-fields');
+        const imageDimensionsNote = document.getElementById('lfp-image-dimensions-note');
         if (!toggle || !checkbox || !fields) return;
 
         toggle.classList.toggle('lfp-hidden', !hasBackground);
         if (!hasBackground) checkbox.checked = true;
         fields.classList.toggle('lfp-hidden', hasBackground && !checkbox.checked);
+        imageDimensionsNote?.classList.toggle('lfp-hidden', !hasBackground || checkbox.checked);
     }
 
     // Main Init

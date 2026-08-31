@@ -43,18 +43,21 @@
                     {% if has_edit_permission %}
                         <div class="lfp-create-box text-left">
                             <h5>Create Map</h5>
-                            <div class="form-group">
-                                <label>Background Image (Optional)</label>
+                            <div class="form-group lfp-create-background">
+                                <label for="lfp-map-bg">Background Image (Optional)</label>
                                 <input type="file"
                                        id="lfp-map-bg"
                                        class="form-control"
                                        accept="image/png,image/jpeg,image/svg+xml">
                             </div>
-                            <div id="lfp-custom-dimensions-toggle" class="form-check form-switch mb-3 lfp-hidden">
+                            <p id="lfp-image-dimensions-note" class="text-muted small lfp-hidden" aria-live="polite">
+                                The selected image will set the map dimensions.
+                            </p>
+                            <div id="lfp-custom-dimensions-toggle" class="form-check form-switch lfp-create-dimensions-toggle lfp-hidden">
                                 <input id="lfp-custom-dimensions" class="form-check-input" type="checkbox">
                                 <label class="form-check-label" for="lfp-custom-dimensions">Use custom dimensions</label>
                             </div>
-                            <div id="lfp-custom-dimensions-fields" class="row">
+                            <div id="lfp-custom-dimensions-fields" class="row lfp-create-dimension-fields">
                                 <div class="col-sm-6 form-group">
                                     <label for="lfp-map-width">Logical Width</label>
                                     <input type="number" id="lfp-map-width" class="form-control" min="1" value="1000" required>
@@ -64,7 +67,7 @@
                                     <input type="number" id="lfp-map-height" class="form-control" min="1" value="1000" required>
                                 </div>
                             </div>
-                            <button id="btn-lfp-create-map" class="btn btn-primary mt-2">Create</button>
+                            <button id="btn-lfp-create-map" class="btn btn-primary lfp-create-submit">Create</button>
                         </div>
                     {% endif %}
                 </div>

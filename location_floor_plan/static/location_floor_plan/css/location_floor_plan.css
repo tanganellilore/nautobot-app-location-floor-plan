@@ -35,6 +35,26 @@
     margin: 0 auto;
 }
 
+.lfp-create-box h5 {
+    margin: 0 0 1.25rem;
+}
+
+.lfp-create-background {
+    margin-bottom: 1rem;
+}
+
+.lfp-create-dimensions-toggle {
+    margin: 1.25rem 0 1rem;
+}
+
+.lfp-create-dimension-fields {
+    row-gap: 0.75rem;
+}
+
+.lfp-create-submit {
+    margin-top: 0.75rem;
+}
+
 /* Rack statuses - using pattern/border/text */
 .rack-placement {
     stroke: var(--bs-border-color);
