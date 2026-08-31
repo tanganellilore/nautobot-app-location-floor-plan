@@ -453,6 +453,77 @@
         });
     }
 
+    function getImageDimensions(file) {
+        return new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(file);
+            const image = new Image();
+            image.onload = () => {
+                URL.revokeObjectURL(url);
+                resolve({ width: image.naturalWidth, height: image.naturalHeight });
+            };
+            image.onerror = () => {
+                URL.revokeObjectURL(url);
+                reject(new Error('Could not read the selected image dimensions.'));
+            };
+            image.src = url;
+        });
+    }
+
+    function showReplaceBackgroundDialog(file, imageDimensions) {
+        return new Promise(resolve => {
+            const modalEl = document.getElementById('lfp-replace-background-modal');
+            const modal = typeof bootstrap !== 'undefined' ? bootstrap.Modal.getOrCreateInstance(modalEl) : { show: () => modalEl.dispatchEvent(new Event('shown.bs.modal')), hide: () => modalEl.dispatchEvent(new Event('hidden.bs.modal')) };
+            const customToggle = document.getElementById('lfp-replace-custom-dimensions');
+            const customFields = document.getElementById('lfp-replace-custom-dimension-fields');
+            const widthInput = document.getElementById('lfp-replace-map-width');
+            const heightInput = document.getElementById('lfp-replace-map-height');
+            const scaleToggle = document.getElementById('lfp-replace-scale-placements');
+            const confirmBtn = document.getElementById('lfp-replace-background-confirm');
+            let resolved = false;
+
+            document.getElementById('lfp-replace-current-dimensions').textContent = `${mapData.map.logical_width} × ${mapData.map.logical_height}`;
+            document.getElementById('lfp-replace-image-dimensions').textContent = `${imageDimensions.width} × ${imageDimensions.height}`;
+            customToggle.checked = false;
+            widthInput.value = mapData.map.logical_width;
+            heightInput.value = mapData.map.logical_height;
+            scaleToggle.checked = true;
+            customFields.classList.add('lfp-hidden');
+
+            const syncCustomFields = () => customFields.classList.toggle('lfp-hidden', !customToggle.checked);
+            const cleanup = () => {
+                customToggle.removeEventListener('change', syncCustomFields);
+                modalEl.removeEventListener('hidden.bs.modal', onHidden);
+                confirmBtn.onclick = null;
+            };
+            const finish = (options) => {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                resolve(options);
+            };
+            const onHidden = () => finish(null);
+
+            customToggle.addEventListener('change', syncCustomFields);
+            confirmBtn.onclick = () => {
+                const logicalWidth = Number(widthInput.value);
+                const logicalHeight = Number(heightInput.value);
+                if (customToggle.checked && (!Number.isInteger(logicalWidth) || !Number.isInteger(logicalHeight) || logicalWidth < 1 || logicalHeight < 1)) {
+                    showAlert('Invalid dimensions', 'Enter positive integer logical width and height values.');
+                    return;
+                }
+                finish({
+                    file,
+                    logicalWidth: customToggle.checked ? logicalWidth : null,
+                    logicalHeight: customToggle.checked ? logicalHeight : null,
+                    scalePlacements: scaleToggle.checked
+                });
+                modal.hide();
+            };
+            modalEl.addEventListener('hidden.bs.modal', onHidden);
+            modal.show();
+        });
+    }
+
     let select2Initialized = false;
     function showPicker(title, items, labelText) {
         return new Promise(resolve => {
@@ -1168,7 +1239,11 @@
                     const formData = new FormData();
                     formData.append('background', bgInput.files[0]);
                     formData.append('expected_revision', newMap.revision || 1);
-                    await fetch(mapActionUrl(newMap.id, 'background'), {method: 'PUT', headers: {'Accept': 'application/json', 'X-CSRFToken': config.csrfToken, 'If-Match': String(newMap.revision || 1)}, body: formData});
+                    formData.append('logical_width', width);
+                    formData.append('logical_height', height);
+                    formData.append('scale_placements', 'false');
+                    const backgroundResponse = await fetch(mapActionUrl(newMap.id, 'background'), {method: 'PUT', headers: {'Accept': 'application/json', 'X-CSRFToken': config.csrfToken, 'If-Match': String(newMap.revision || 1)}, body: formData});
+                    if (!backgroundResponse.ok) throw new Error("Failed to upload background.");
                 }
                 
                 await loadMapData();
@@ -1209,11 +1284,21 @@
         if (mapData && mapData.inherited) return;
         const file = event.target.files && event.target.files[0];
         if (!file || !mapData || !mapData.map) return;
+        event.target.value = '';
         const wasEditMode = isEditMode;
-        const formData = new FormData();
-        formData.append('background', file);
-        formData.append('expected_revision', originalRevision);
         try {
+            const imageDimensions = await getImageDimensions(file);
+            const options = await showReplaceBackgroundDialog(file, imageDimensions);
+            if (!options) return;
+
+            const formData = new FormData();
+            formData.append('background', options.file);
+            formData.append('expected_revision', originalRevision);
+            formData.append('scale_placements', String(options.scalePlacements));
+            if (options.logicalWidth !== null) {
+                formData.append('logical_width', String(options.logicalWidth));
+                formData.append('logical_height', String(options.logicalHeight));
+            }
             const response = await fetch(mapActionUrl(mapData.map.id, 'background'), {method: 'PUT', headers: {'Accept': 'application/json', 'X-CSRFToken': config.csrfToken, 'If-Match': String(originalRevision)}, body: formData});
             if (!response.ok) throw new Error(await response.text());
             await loadMapData(wasEditMode);
