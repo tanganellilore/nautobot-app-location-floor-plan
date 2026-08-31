@@ -184,10 +184,10 @@ class FloorPlanAPITestCase(TestCase):
         background_url = api_reverse("floorplan-background", {"pk": floor_plan.pk})
         png = SimpleUploadedFile("floor.png", PNG_1X1, content_type="image/png")
         response = self.client.put(background_url, {"background": png}, format="multipart", HTTP_IF_MATCH='"1"')
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         response = self.client.get(background_url, {"v": "7"})
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "image/png")
 
         # Normal detail/list endpoints still enforce unknown query parameter rejection.
