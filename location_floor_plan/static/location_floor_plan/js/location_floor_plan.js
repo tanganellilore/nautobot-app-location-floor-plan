@@ -1016,6 +1016,7 @@
         if (map) {
             map.pm.disableDraw();
             map.pm.disableGlobalEditMode();
+            map.pm.disableGlobalDragMode();
             
             const geomanToolbar = document.querySelector('.leaflet-pm-toolbar');
             if (geomanToolbar) geomanToolbar.style.display = '';
@@ -1036,18 +1037,22 @@
         
         map.pm.disableDraw();
         
-        map.pm.enableGlobalEditMode(); // Always on in edit mode
-        
         if (!mode) {
             document.getElementById('btn-lfp-select')?.classList.add('active');
-        } else if (mode === 'location') {
-            document.getElementById('btn-lfp-add-loc')?.classList.add('active');
-            const c = getThemeColor();
-            map.pm.enableDraw('Polygon', { snappable: true, snapDistance: 20, templineStyle: { color: c, weight: 3, dashArray: '5,5' }, hintlineStyle: { color: c, weight: 3, dashArray: '5,5' }, pathOptions: { color: c, weight: 3, dashArray: '5,5', fillColor: c, fillOpacity: 0.1, bubblingMouseEvents: false } });
-        } else if (mode === 'rack') {
-            document.getElementById('btn-lfp-add-rack')?.classList.add('active');
-            const c = getThemeColor();
-            map.pm.enableDraw('Rectangle', { snappable: true, snapDistance: 20, templineStyle: { color: c, weight: 3 }, hintlineStyle: { color: c, weight: 3 }, pathOptions: { color: c, weight: 3, fillColor: c, fillOpacity: 0.1, bubblingMouseEvents: false } });
+            map.pm.enableGlobalEditMode();
+            map.pm.enableGlobalDragMode();
+        } else {
+            map.pm.disableGlobalEditMode();
+            map.pm.disableGlobalDragMode();
+            if (mode === 'location') {
+                document.getElementById('btn-lfp-add-loc')?.classList.add('active');
+                const c = getThemeColor();
+                map.pm.enableDraw('Polygon', { snappable: true, snapDistance: 20, templineStyle: { color: c, weight: 3, dashArray: '5,5' }, hintlineStyle: { color: c, weight: 3, dashArray: '5,5' }, pathOptions: { color: c, weight: 3, dashArray: '5,5', fillColor: c, fillOpacity: 0.1, bubblingMouseEvents: false } });
+            } else if (mode === 'rack') {
+                document.getElementById('btn-lfp-add-rack')?.classList.add('active');
+                const c = getThemeColor();
+                map.pm.enableDraw('Rectangle', { snappable: true, snapDistance: 20, templineStyle: { color: c, weight: 3 }, hintlineStyle: { color: c, weight: 3 }, pathOptions: { color: c, weight: 3, fillColor: c, fillOpacity: 0.1, bubblingMouseEvents: false } });
+            }
         }
     }
 
