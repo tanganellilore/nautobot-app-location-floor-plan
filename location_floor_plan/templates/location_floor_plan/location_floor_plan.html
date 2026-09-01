@@ -138,6 +138,32 @@
     </div>
 </div>
 
+<div class="modal fade" id="lfp-color-modal" tabindex="-1" aria-labelledby="lfp-color-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="lfp-color-title">Shape Color</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="lfp-color-input" class="form-label">Placement color</label>
+                    <input type="text"
+                           id="lfp-color-input"
+                           class="form-control"
+                           data-coloris
+                           value="#0d6efd"
+                           autocomplete="off">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="lfp-color-reset">Reset to default</button>
+                <button type="button" class="btn btn-primary" id="lfp-color-save">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="lfp-replace-background-modal" tabindex="-1" aria-labelledby="lfp-replace-background-title" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -180,12 +206,15 @@
     <link rel="stylesheet"
           href="{% static 'location_floor_plan/vendor/leaflet-geoman.css' %}">
     <link rel="stylesheet"
+          href="{% static 'location_floor_plan/vendor/coloris.min.css' %}">
+    <link rel="stylesheet"
           href="{% static 'location_floor_plan/css/location_floor_plan.css' %}">
 {% endblock %}
 {% block javascript %}
     {{ block.super }}
     <script src="{% static 'location_floor_plan/vendor/leaflet.js' %}"></script>
     <script src="{% static 'location_floor_plan/vendor/leaflet-geoman.min.js' %}"></script>
+    <script src="{% static 'location_floor_plan/vendor/coloris.min.js' %}"></script>
     {{ lfp_permissions|json_script:"lfp-permissions" }}
     {{ object.id|json_script:"lfp-location-id" }}
     {{ api_resolved_url|json_script:"lfp-api-resolved-url" }}

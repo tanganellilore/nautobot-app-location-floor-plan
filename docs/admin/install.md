@@ -32,6 +32,16 @@ PLUGINS_CONFIG = {
         "background_max_pixels": 16_000_000,
         "background_max_dimension": 8000,
         "supported_targets": ["dcim.location", "dcim.rack"],
+        "location_default_color": "#0d6efd",
+        "rack_default_color": "#6c757d",
+        "rack_utilization_color_enabled": True,
+        "rack_utilization_palette": {
+            "empty": "#6c757d",
+            "low": "#198754",
+            "medium": "#ffc107",
+            "high": "#fd7e14",
+            "critical": "#dc3545",
+        },
     }
 }
 ```
@@ -58,6 +68,17 @@ sudo systemctl restart nautobot nautobot-worker nautobot-scheduler
 ## Secure backgrounds
 
 PNG, JPEG, and SVG uploads are accepted and stored as PNG. Defaults: 2 MB, 16 million pixels, 8,000 px max dimension. SVGs are sanitized with `defusedxml`, constrained to safe shape tags/attributes, rasterized by CairoSVG, and served with `nosniff`, private no-store caching, and restrictive CSP headers.
+
+## Shape colors
+
+Location and Rack placements use a server-side color precedence chain:
+
+1. Placement-specific override (nullable).
+2. Persistent target style on the Location or Rack (`/api/plugins/location-floor-plan/location-styles/` and `/rack-styles/`).
+3. For racks only: utilization palette color when `rack_utilization_color_enabled` is `True`.
+4. Global default (`location_default_color` or `rack_default_color`).
+
+All colors must be strict 6-digit hex (e.g. `#0d6efd`). The editor exposes a native color input for placement overrides; target-level styles can be managed through the REST API.
 
 ## Audit stale placements
 
