@@ -162,6 +162,12 @@
         }
     }
 
+    function setColorInputValue(inputEl, color) {
+        if (!inputEl) return;
+        inputEl.value = color;
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
     function inheritedColorForLayer(layer) {
         return layer.options.targetColor || layer.options.defaultColor || layer.options.originalEffectiveColor || defaultColorForType(layer.options.placementType);
     }
@@ -180,7 +186,7 @@
             let resolved = false;
 
             if (titleEl) titleEl.textContent = `Color for ${layer.options.targetName || type}`;
-            if (inputEl) inputEl.value = layer.options.colorOverride || inheritedColorForLayer(layer);
+            setColorInputValue(inputEl, layer.options.colorOverride || inheritedColorForLayer(layer));
 
             const cleanup = () => {
                 if (saveBtn) saveBtn.onclick = null;
@@ -219,7 +225,7 @@
             if (resetBtn) {
                 resetBtn.onclick = () => {
                     const inherited = inheritedColorForLayer(layer);
-                    if (inputEl) inputEl.value = inherited;
+                    setColorInputValue(inputEl, inherited);
                     layer.options.colorOverride = null;
                     applyLayerColor(layer, inherited);
                 };
@@ -684,6 +690,31 @@
             csrfToken: JSON.parse(document.getElementById('lfp-csrf-token').textContent)
         };
         config.hasEditPermission = config.permissions.addMap || config.permissions.changeMap || config.permissions.deleteMap;
+
+        if (typeof Coloris !== 'undefined') {
+            Coloris({
+                el: '#lfp-color-input',
+                format: 'hex',
+                alpha: false,
+                themeMode: 'auto',
+                swatches: [
+                    '#0d6efd',
+                    '#6610f2',
+                    '#6f42c1',
+                    '#d63384',
+                    '#dc3545',
+                    '#fd7e14',
+                    '#ffc107',
+                    '#198754',
+                    '#20c997',
+                    '#0dcaf0',
+                    '#6c757d',
+                    '#adb5bd',
+                    '#000000',
+                    '#ffffff'
+                ]
+            });
+        }
 
         document.getElementById('btn-lfp-reload')?.addEventListener('click', loadMapData);
         
