@@ -445,7 +445,7 @@
             panel.appendChild(createTooltipActionButton({
                 icon: 'mdi-palette',
                 label: 'Change color',
-                className: 'lfp-tooltip-action--edit',
+                className: 'lfp-tooltip-action--color',
                 onClick: () => showColorModal(selectedLayer)
             }));
             panel.appendChild(createTooltipActionButton({
