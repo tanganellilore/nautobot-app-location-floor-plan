@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nautobot-location-floor-plan"
-version = "1.0.0"
+version = "1.0.1a0"
 description = "Interactive physical hierarchy maps for Nautobot Locations and Racks"
 authors = ["Lorenzo Tanganelli <lorenzo.tanganelli@staff.aruba.it>"]
 license = "Apache-2.0"
