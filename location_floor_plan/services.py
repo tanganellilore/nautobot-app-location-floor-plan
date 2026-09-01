@@ -600,7 +600,7 @@ def _scale_rack_placement(x, y, width, height, old_width, old_height, new_width,
 @transaction.atomic
 def replace_background(
     *, user, floor_plan, expected_revision, upload, logical_width=None, logical_height=None, scale_placements=True
-):
+): # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     """Replace the background image and optionally rescale placements to new dimensions."""
     parent = FloorPlan.objects.select_for_update().get(pk=floor_plan.pk)
     _check(user, "location_floor_plan.change_floorplan", parent)
