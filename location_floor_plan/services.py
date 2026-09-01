@@ -114,6 +114,54 @@ def _setting(name, default):
     return settings.PLUGINS_CONFIG.get("location_floor_plan", {}).get(name, default)
 
 
+def _default_location_color():
+    return _setting("location_default_color", "#0d6efd")
+
+
+def _default_rack_color():
+    return _setting("rack_default_color", "#6c757d")
+
+
+def _rack_utilization_color_enabled():
+    return _setting("rack_utilization_color_enabled", True)
+
+
+def _rack_utilization_palette():
+    return _setting(
+        "rack_utilization_palette",
+        {
+            "empty": "#6c757d",
+            "low": "#198754",
+            "medium": "#ffc107",
+            "high": "#fd7e14",
+            "critical": "#dc3545",
+        },
+    )
+
+
+def _effective_location_color(placement, *, style_map):
+    if placement.color:
+        return placement.color
+    style_color = style_map.get(placement.location_id)
+    if style_color:
+        return style_color
+    return _default_location_color()
+
+
+def _effective_rack_color(placement, *, style_map, usage):
+    if placement.color:
+        return placement.color
+    style_color = style_map.get(placement.rack_id)
+    if style_color:
+        return style_color
+    if _rack_utilization_color_enabled():
+        level = usage[placement.rack_id]["level"]
+        palette_color = _rack_utilization_palette().get(level)
+        if palette_color:
+            return palette_color
+    return _default_rack_color()
+
+
 def _assert_revision(floor_plan: FloorPlan | None, expected_revision: int) -> None:
     if floor_plan is None:
         if expected_revision != 0:
@@ -143,8 +191,16 @@ def _assert_restricted(user, action: str, obj) -> None:
 def _materialize_snapshot(user, floor_plan: FloorPlan) -> dict:
     _check(user, "location_floor_plan.view_floorplan", floor_plan)
     _check(user, "dcim.view_location", floor_plan.location)
-    location_items = list(floor_plan.location_placements.select_related("location", "floor_plan__location"))
-    rack_items = list(floor_plan.rack_placements.select_related("rack", "rack__location", "floor_plan__location"))
+    location_items = list(
+        floor_plan.location_placements.select_related(
+            "location", "floor_plan__location", "location__location_floor_plan_style"
+        )
+    )
+    rack_items = list(
+        floor_plan.rack_placements.select_related(
+            "rack", "rack__location", "floor_plan__location", "rack__location_floor_plan_style"
+        )
+    )
     for placement in location_items:
         _check(user, "location_floor_plan.view_locationplacement", placement)
         _check(user, "dcim.view_location", placement.location)
@@ -297,9 +353,16 @@ def replace_snapshot(
             obj = existing_locations[location_id]
             _check(user, "location_floor_plan.change_locationplacement", obj)
             obj.geometry = item["geometry"]
+            if "color" in item:
+                obj.color = item["color"]
         else:
             _check(user, "location_floor_plan.add_locationplacement")
-            obj = LocationPlacement(floor_plan=parent, location=item["location"], geometry=item["geometry"])
+            obj = LocationPlacement(
+                floor_plan=parent,
+                location=item["location"],
+                geometry=item["geometry"],
+                color=item.get("color"),
+            )
         obj.full_clean()
         obj.save()
         _assert_restricted(user, "change" if location_id in existing_locations else "add", obj)
@@ -312,9 +375,11 @@ def replace_snapshot(
             _check(user, "location_floor_plan.change_rackplacement", obj)
             for key, value in fields.items():
                 setattr(obj, key, value)
+            if "color" in item:
+                obj.color = item["color"]
         else:
             _check(user, "location_floor_plan.add_rackplacement")
-            obj = RackPlacement(floor_plan=parent, rack=item["rack"], **fields)
+            obj = RackPlacement(floor_plan=parent, rack=item["rack"], color=item.get("color"), **fields)
         obj.full_clean()
         obj.save()
         _assert_restricted(user, "change" if rack_id in existing_racks else "add", obj)
@@ -439,6 +504,18 @@ def renderer_payload(location, *, user):
     snapshot = get_visible_snapshot(user=user, floor_plan=result.floor_plan)
     racks = [p.rack for p in snapshot["rack_placements"]]
     usage = rack_usage_for_racks(racks)
+
+    location_styles = {}
+    for p in snapshot["location_placements"]:
+        style = getattr(p.location, "location_floor_plan_style", None)
+        if style and style.color:
+            location_styles[p.location_id] = style.color
+    rack_styles = {}
+    for p in snapshot["rack_placements"]:
+        style = getattr(p.rack, "location_floor_plan_style", None)
+        if style and style.color:
+            rack_styles[p.rack_id] = style.color
+
     return {
         "requested_location": {"id": str(location.pk), "name": str(location)},
         "map": {
@@ -452,6 +529,10 @@ def renderer_payload(location, *, user):
             )
             if result.floor_plan.background
             else None,
+            "default_location_color": _default_location_color(),
+            "default_rack_color": _default_rack_color(),
+            "rack_utilization_color_enabled": _rack_utilization_color_enabled(),
+            "rack_utilization_palette": _rack_utilization_palette(),
         },
         "inherited": result.source == "ancestor",
         "focus": {
@@ -465,6 +546,10 @@ def renderer_payload(location, *, user):
                 "id": str(p.pk),
                 "location": {"id": str(p.location_id), "name": str(p.location)},
                 "geometry": p.geometry,
+                "color": _effective_location_color(p, style_map=location_styles),
+                "color_override": p.color,
+                "target_color": location_styles.get(p.location_id),
+                "default_color": _default_location_color(),
                 "detail_url": p.location.get_absolute_url(),
             }
             for p in snapshot["location_placements"]
@@ -478,6 +563,10 @@ def renderer_payload(location, *, user):
                 "y": p.y,
                 "width": p.width,
                 "height": p.height,
+                "color": _effective_rack_color(p, style_map=rack_styles, usage=usage),
+                "color_override": p.color,
+                "target_color": rack_styles.get(p.rack_id),
+                "default_color": _rack_default_color(p, usage=usage),
                 "used_ru": usage[p.rack_id]["used_ru"],
                 "total_ru": usage[p.rack_id]["total_ru"],
                 "usage_percentage": usage[p.rack_id]["percentage"],
@@ -490,6 +579,15 @@ def renderer_payload(location, *, user):
             if _can(user, "dcim.view_rack", p.rack)
         ],
     }
+
+
+def _rack_default_color(placement, usage):
+    if _rack_utilization_color_enabled():
+        level = usage[placement.rack_id]["level"]
+        palette_color = _rack_utilization_palette().get(level)
+        if palette_color:
+            return palette_color
+    return _default_rack_color()
 
 
 def available_descendants(floor_plan, *, user):

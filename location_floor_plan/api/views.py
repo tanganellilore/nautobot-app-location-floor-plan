@@ -7,19 +7,21 @@ from django.http import FileResponse
 from drf_spectacular.utils import extend_schema
 from nautobot.apps.api import NautobotModelViewSet
 from nautobot.dcim.models import Location
-from rest_framework import decorators, parsers, response, status, views
-from rest_framework.exceptions import APIException, MethodNotAllowed, ValidationError
+from rest_framework import decorators, parsers, permissions, response, status, views, viewsets
+from rest_framework.exceptions import APIException, MethodNotAllowed, PermissionDenied, ValidationError
 
 from location_floor_plan.api.filtersets import FloorPlanFilterSet, LocationPlacementFilterSet, RackPlacementFilterSet
 from location_floor_plan.api.serializers import (
     FloorPlanSerializer,
     FloorPlanSnapshotSerializer,
     LocationPlacementSerializer,
+    LocationStyleSerializer,
     RackPlacementSerializer,
+    RackStyleSerializer,
     ResolvedFloorPlanSerializer,
     SnapshotWriteSerializer,
 )
-from location_floor_plan.models import FloorPlan, LocationPlacement, RackPlacement
+from location_floor_plan.models import FloorPlan, LocationPlacement, LocationStyle, RackPlacement, RackStyle
 from location_floor_plan.services import (
     RevisionConflict,
     available_descendants,
@@ -385,6 +387,82 @@ class RackPlacementViewSet(WritablePlacementMixin, NautobotModelViewSet):
         except DjangoValidationError as exc:
             raise ValidationError(exc.messages) from exc
         return response.Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LocationStyleViewSet(viewsets.ModelViewSet):
+    """CRUD for persistent Location color styles."""
+
+    queryset = LocationStyle.objects.select_related("location")
+    serializer_class = LocationStyleSerializer
+    permission_classes = [permissions.DjangoModelPermissions]
+
+    def get_queryset(self):
+        return LocationStyle.objects.filter(location__in=Location.objects.restrict(self.request.user, "view"))
+
+    def perform_create(self, serializer):
+        location = serializer.validated_data["location"]
+        if not self.request.user.has_perm("dcim.view_location", location):
+            raise PermissionDenied("You do not have permission to view this location.")
+        if not self.request.user.has_perm("dcim.change_location", location):
+            raise PermissionDenied("You do not have permission to style this location.")
+        serializer.save()
+
+    def perform_update(self, serializer):
+        location = serializer.validated_data.get("location")
+        if location is not None and location.pk != serializer.instance.location_id:
+            raise ValidationError("The target Location cannot be changed after creation.")
+        target = serializer.instance.location
+        if not self.request.user.has_perm("dcim.view_location", target):
+            raise PermissionDenied("You do not have permission to view this location.")
+        if not self.request.user.has_perm("dcim.change_location", target):
+            raise PermissionDenied("You do not have permission to style this location.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if not self.request.user.has_perm("dcim.view_location", instance.location):
+            raise PermissionDenied("You do not have permission to view this location.")
+        if not self.request.user.has_perm("dcim.change_location", instance.location):
+            raise PermissionDenied("You do not have permission to style this location.")
+        instance.delete()
+
+
+class RackStyleViewSet(viewsets.ModelViewSet):
+    """CRUD for persistent Rack color styles."""
+
+    queryset = RackStyle.objects.select_related("rack", "rack__location")
+    serializer_class = RackStyleSerializer
+    permission_classes = [permissions.DjangoModelPermissions]
+
+    def get_queryset(self):
+        from nautobot.dcim.models import Rack  # pylint: disable=import-outside-toplevel
+
+        return RackStyle.objects.filter(rack__in=Rack.objects.restrict(self.request.user, "view"))
+
+    def perform_create(self, serializer):
+        rack = serializer.validated_data["rack"]
+        if not self.request.user.has_perm("dcim.view_rack", rack):
+            raise PermissionDenied("You do not have permission to view this rack.")
+        if not self.request.user.has_perm("dcim.change_rack", rack):
+            raise PermissionDenied("You do not have permission to style this rack.")
+        serializer.save()
+
+    def perform_update(self, serializer):
+        rack = serializer.validated_data.get("rack")
+        if rack is not None and rack.pk != serializer.instance.rack_id:
+            raise ValidationError("The target Rack cannot be changed after creation.")
+        target = serializer.instance.rack
+        if not self.request.user.has_perm("dcim.view_rack", target):
+            raise PermissionDenied("You do not have permission to view this rack.")
+        if not self.request.user.has_perm("dcim.change_rack", target):
+            raise PermissionDenied("You do not have permission to style this rack.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if not self.request.user.has_perm("dcim.view_rack", instance.rack):
+            raise PermissionDenied("You do not have permission to view this rack.")
+        if not self.request.user.has_perm("dcim.change_rack", instance.rack):
+            raise PermissionDenied("You do not have permission to style this rack.")
+        instance.delete()
 
 
 class ResolvedFloorPlanView(views.APIView):

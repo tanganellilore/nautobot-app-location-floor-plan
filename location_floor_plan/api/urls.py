@@ -9,6 +9,8 @@ router = OrderedDefaultRouter()
 router.register("floor-plans", views.FloorPlanViewSet)
 router.register("location-placements", views.LocationPlacementViewSet)
 router.register("rack-placements", views.RackPlacementViewSet)
+router.register("location-styles", views.LocationStyleViewSet)
+router.register("rack-styles", views.RackStyleViewSet)
 
 urlpatterns = [
     path(

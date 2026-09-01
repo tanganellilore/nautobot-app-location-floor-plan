@@ -146,6 +146,90 @@
         return layer?.options?.placementType || (locationLayerGroup?.hasLayer(layer) ? 'location' : 'rack');
     }
 
+    function defaultColorForType(type) {
+        if (!mapData || !mapData.map) return '#0d6efd';
+        return type === 'rack'
+            ? (mapData.map.default_rack_color || '#6c757d')
+            : (mapData.map.default_location_color || '#0d6efd');
+    }
+
+    function applyLayerColor(layer, color) {
+        if (!layer || !color) return;
+        layer.setStyle({ color: color, fillColor: color });
+        if (layer._path) {
+            layer._path.style.stroke = color;
+            layer._path.style.fill = color;
+        }
+    }
+
+    function inheritedColorForLayer(layer) {
+        return layer.options.targetColor || layer.options.defaultColor || layer.options.originalEffectiveColor || defaultColorForType(layer.options.placementType);
+    }
+
+    function showColorModal(layer) {
+        return new Promise(resolve => {
+            const type = getLayerPlacementType(layer);
+            const titleEl = document.getElementById('lfp-color-title');
+            const inputEl = document.getElementById('lfp-color-input');
+            const saveBtn = document.getElementById('lfp-color-save');
+            const resetBtn = document.getElementById('lfp-color-reset');
+            const modalEl = document.getElementById('lfp-color-modal');
+            const modal = typeof bootstrap !== 'undefined'
+                ? bootstrap.Modal.getOrCreateInstance(modalEl)
+                : { show: () => modalEl.dispatchEvent(new Event('shown.bs.modal')), hide: () => modalEl.dispatchEvent(new Event('hidden.bs.modal')) };
+            let resolved = false;
+
+            if (titleEl) titleEl.textContent = `Color for ${layer.options.targetName || type}`;
+            if (inputEl) inputEl.value = layer.options.colorOverride || inheritedColorForLayer(layer);
+
+            const cleanup = () => {
+                if (saveBtn) saveBtn.onclick = null;
+                if (resetBtn) resetBtn.onclick = null;
+                modalEl.removeEventListener('hidden.bs.modal', onHidden);
+            };
+
+            const onHidden = () => {
+                cleanup();
+                if (!resolved) {
+                    resolved = true;
+                    resolve(null);
+                }
+            };
+
+            if (saveBtn) {
+                saveBtn.onclick = () => {
+                    const color = inputEl ? inputEl.value : null;
+                    const inherited = inheritedColorForLayer(layer);
+                    if (color && color.toLowerCase() !== inherited.toLowerCase()) {
+                        layer.options.colorOverride = color;
+                        applyLayerColor(layer, color);
+                    } else {
+                        layer.options.colorOverride = null;
+                        applyLayerColor(layer, inherited);
+                    }
+                    cleanup();
+                    if (!resolved) {
+                        resolved = true;
+                        resolve(color);
+                        modal.hide();
+                    }
+                };
+            }
+
+            if (resetBtn) {
+                resetBtn.onclick = () => {
+                    const inherited = inheritedColorForLayer(layer);
+                    if (inputEl) inputEl.value = inherited;
+                    layer.options.colorOverride = null;
+                    applyLayerColor(layer, inherited);
+                };
+            }
+
+            modalEl.addEventListener('hidden.bs.modal', onHidden);
+            modal.show();
+        });
+    }
+
     function getTooltipPlacement(layer, preferredDirection = 'top') {
         if (!map || !layer || !layer.getBounds) {
             return {
@@ -358,6 +442,12 @@
 
             const panel = document.createElement('div');
             panel.className = 'lfp-action-panel gap-2';
+            panel.appendChild(createTooltipActionButton({
+                icon: 'mdi-palette',
+                label: 'Change color',
+                className: 'lfp-tooltip-action--edit',
+                onClick: () => showColorModal(selectedLayer)
+            }));
             panel.appendChild(createTooltipActionButton({
                 icon: 'mdi-pencil',
                 label: 'Change target',
@@ -833,10 +923,12 @@
                     layer.options.placementType = 'location';
                     layer.options.pane = 'locationPane';
                     layer.options.className = 'lfp-location-poly';
+                    layer.options.originalEffectiveColor = defaultColorForType('location');
                     // Bugfix: adding to group right after create requires a timeout or removing from map first
                     map.removeLayer(layer);
                     locationLayerGroup.addLayer(layer);
                     attachEditLabel(layer, pendingPlacementData.name);
+                    applyLayerColor(layer, layer.options.originalEffectiveColor);
                     layer.on('click', (evt) => {
                         if (isEditMode) {
                             if (evt.originalEvent) L.DomEvent.stopPropagation(evt.originalEvent);
@@ -850,9 +942,11 @@
                     layer.options.placementType = 'rack';
                     layer.options.pane = 'rackPane';
                     layer.options.className = 'rack-placement rack-usage-empty';
+                    layer.options.originalEffectiveColor = defaultColorForType('rack');
                     map.removeLayer(layer);
                     rackLayerGroup.addLayer(layer);
                     attachEditLabel(layer, pendingPlacementData.name);
+                    applyLayerColor(layer, layer.options.originalEffectiveColor);
                     layer.on('click', (evt) => {
                         if (isEditMode) {
                             if (evt.originalEvent) L.DomEvent.stopPropagation(evt.originalEvent);
@@ -884,6 +978,10 @@
             poly.options.targetId = targetId;
             poly.options.targetName = targetName;
             poly.options.placementType = 'location';
+            poly.options.originalEffectiveColor = lp.color;
+            poly.options.colorOverride = lp.color_override || null;
+            poly.options.targetColor = lp.target_color || null;
+            poly.options.defaultColor = lp.default_color || null;
             
             if (isEditMode) {
                 attachEditLabel(poly, targetName);
@@ -905,6 +1003,7 @@
                 });
                                             }
             poly.addTo(locationLayerGroup);
+            applyLayerColor(poly, lp.color || defaultColorForType('location'));
         });
 
         mapData.rack_placements.forEach(rp => {
@@ -923,6 +1022,10 @@
             rect.options.targetName = targetName;
             rect.options.placementType = 'rack';
             rect.options.tooltipClearance = 76;
+            rect.options.originalEffectiveColor = rp.color;
+            rect.options.colorOverride = rp.color_override || null;
+            rect.options.targetColor = rp.target_color || null;
+            rect.options.defaultColor = rp.default_color || null;
             
             let subtextParts = [];
             if (rp.used_ru !== undefined && rp.total_ru !== undefined) {
@@ -966,6 +1069,7 @@
                 });
                                             }
             rect.addTo(rackLayerGroup);
+            applyLayerColor(rect, rp.color || defaultColorForType('rack'));
         });
     }
 
@@ -1090,7 +1194,11 @@
         locationLayerGroup.eachLayer(layer => {
             const geom = (typeof window !== "undefined" ? window : global).LocationFloorPlanGeometry.leafletToBackend(layer, false);
             if (geom) {
-                const placement = { location: layer.options.targetId, geometry: geom };
+                const placement = {
+                    location: layer.options.targetId,
+                    geometry: geom,
+                    color: layer.options.colorOverride || null
+                };
                 if (layer.options.placementId) placement.id = layer.options.placementId;
                 newLocations.push(placement);
             }
@@ -1100,7 +1208,14 @@
         rackLayerGroup.eachLayer(layer => {
             const geom = (typeof window !== "undefined" ? window : global).LocationFloorPlanGeometry.leafletToBackend(layer, true);
             if (geom) {
-                const placement = { rack: layer.options.targetId, x: geom.x, y: geom.y, width: geom.width, height: geom.height };
+                const placement = {
+                    rack: layer.options.targetId,
+                    x: geom.x,
+                    y: geom.y,
+                    width: geom.width,
+                    height: geom.height,
+                    color: layer.options.colorOverride || null
+                };
                 newRacks.push(placement);
             }
         });

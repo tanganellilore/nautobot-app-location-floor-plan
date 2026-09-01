@@ -30,6 +30,16 @@ class LocationFloorPlanConfig(NautobotAppConfig):
         "background_max_pixels": 16_000_000,
         "background_max_dimension": 8000,
         "supported_targets": ["dcim.location", "dcim.rack"],
+        "location_default_color": "#0d6efd",
+        "rack_default_color": "#6c757d",
+        "rack_utilization_color_enabled": True,
+        "rack_utilization_palette": {
+            "empty": "#6c757d",
+            "low": "#198754",
+            "medium": "#ffc107",
+            "high": "#fd7e14",
+            "critical": "#dc3545",
+        },
     }
     docs_view_name = "plugins:location_floor_plan:docs"
     searchable_models = []

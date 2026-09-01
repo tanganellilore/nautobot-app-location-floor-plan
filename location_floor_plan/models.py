@@ -5,12 +5,17 @@
 from __future__ import annotations
 
 import math
+import re
+import uuid
 
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
 from nautobot.apps.models import PrimaryModel
 from nautobot.dcim.models import Location, Rack
+
+HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+validate_hex_color = RegexValidator(HEX_COLOR_RE, "Enter a valid hex color (e.g. #RRGGBB).")
 
 MAX_LOGICAL_SIZE = 1_000_000
 MAX_VERTICES = 256
@@ -166,6 +171,13 @@ class LocationPlacement(PrimaryModel):
     floor_plan = models.ForeignKey(FloorPlan, on_delete=models.CASCADE, related_name="location_placements")
     location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name="location_floor_plan_placements")
     geometry = models.JSONField()
+    color = models.CharField(
+        max_length=7,
+        blank=True,
+        null=True,
+        validators=[validate_hex_color],
+        help_text="Optional hex color override (#RRGGBB) for this placement.",
+    )
 
     natural_key_field_names = ["floor_plan", "location"]
 
@@ -207,6 +219,13 @@ class RackPlacement(PrimaryModel):
     y = models.PositiveIntegerField()
     width = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     height = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    color = models.CharField(
+        max_length=7,
+        blank=True,
+        null=True,
+        validators=[validate_hex_color],
+        help_text="Optional hex color override (#RRGGBB) for this placement.",
+    )
 
     natural_key_field_names = ["floor_plan", "rack"]
 
@@ -244,3 +263,45 @@ class RackPlacement(PrimaryModel):
                 or self.y + self.height > self.floor_plan.logical_height
             ):
                 raise ValidationError("Rack placement rectangle exceeds map bounds.")
+
+
+class LocationStyle(models.Model):
+    """Persistent color style for a Location target."""
+
+    id = models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False, unique=True)
+    location = models.OneToOneField(Location, on_delete=models.CASCADE, related_name="location_floor_plan_style")
+    color = models.CharField(
+        max_length=7,
+        blank=True,
+        null=True,
+        validators=[validate_hex_color],
+        help_text="Default hex color (#RRGGBB) for placements of this location.",
+    )
+
+    class Meta:
+        verbose_name = "location style"
+        verbose_name_plural = "location styles"
+
+    def __str__(self):
+        return f"Style for {self.location}"
+
+
+class RackStyle(models.Model):
+    """Persistent color style for a Rack target."""
+
+    id = models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False, unique=True)
+    rack = models.OneToOneField(Rack, on_delete=models.CASCADE, related_name="location_floor_plan_style")
+    color = models.CharField(
+        max_length=7,
+        blank=True,
+        null=True,
+        validators=[validate_hex_color],
+        help_text="Default hex color (#RRGGBB) for placements of this rack.",
+    )
+
+    class Meta:
+        verbose_name = "rack style"
+        verbose_name_plural = "rack styles"
+
+    def __str__(self):
+        return f"Style for {self.rack}"
