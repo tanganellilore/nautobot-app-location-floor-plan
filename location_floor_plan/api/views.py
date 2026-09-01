@@ -237,6 +237,9 @@ class FloorPlanViewSet(NautobotModelViewSet):
                     floor_plan=floor_plan,
                     expected_revision=_expected_revision(request),
                     upload=upload,
+                    logical_width=request.data.get("logical_width") or None,
+                    logical_height=request.data.get("logical_height") or None,
+                    scale_placements=request.data.get("scale_placements", "true"),
                 )
             except RevisionConflict as exc:
                 return _conflict_response(exc)
