@@ -174,7 +174,6 @@ class LocationPlacement(PrimaryModel):
     color = models.CharField(
         max_length=7,
         blank=True,
-        null=True,
         validators=[validate_hex_color],
         help_text="Optional hex color override (#RRGGBB) for this placement.",
     )
@@ -222,7 +221,6 @@ class RackPlacement(PrimaryModel):
     color = models.CharField(
         max_length=7,
         blank=True,
-        null=True,
         validators=[validate_hex_color],
         help_text="Optional hex color override (#RRGGBB) for this placement.",
     )
@@ -273,7 +271,6 @@ class LocationStyle(models.Model):
     color = models.CharField(
         max_length=7,
         blank=True,
-        null=True,
         validators=[validate_hex_color],
         help_text="Default hex color (#RRGGBB) for placements of this location.",
     )
@@ -294,7 +291,6 @@ class RackStyle(models.Model):
     color = models.CharField(
         max_length=7,
         blank=True,
-        null=True,
         validators=[validate_hex_color],
         help_text="Default hex color (#RRGGBB) for placements of this rack.",
     )

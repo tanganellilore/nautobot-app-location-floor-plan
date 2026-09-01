@@ -5,6 +5,8 @@ from importlib import metadata
 
 from nautobot.apps import NautobotAppConfig
 
+from location_floor_plan.constants import RACK_UTILIZATION_PALETTE
+
 __version__ = metadata.version("nautobot-location-floor-plan")
 
 
@@ -33,13 +35,7 @@ class LocationFloorPlanConfig(NautobotAppConfig):
         "location_default_color": "#0d6efd",
         "rack_default_color": "#6c757d",
         "rack_utilization_color_enabled": True,
-        "rack_utilization_palette": {
-            "empty": "#6c757d",
-            "low": "#198754",
-            "medium": "#ffc107",
-            "high": "#fd7e14",
-            "critical": "#dc3545",
-        },
+        "rack_utilization_palette": dict(RACK_UTILIZATION_PALETTE),
     }
     docs_view_name = "plugins:location_floor_plan:docs"
     searchable_models = []

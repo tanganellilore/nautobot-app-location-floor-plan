@@ -16,6 +16,7 @@ from django.urls import reverse
 from nautobot.dcim.models import Device, Location, Rack
 from PIL import Image, UnidentifiedImageError
 
+from location_floor_plan.constants import RACK_UTILIZATION_PALETTE
 from location_floor_plan.models import FloorPlan, LocationPlacement, RackPlacement, _is_descendant
 
 SAFE_SVG_ELEMENTS = {
@@ -129,13 +130,7 @@ def _rack_utilization_color_enabled():
 def _rack_utilization_palette():
     return _setting(
         "rack_utilization_palette",
-        {
-            "empty": "#6c757d",
-            "low": "#198754",
-            "medium": "#ffc107",
-            "high": "#fd7e14",
-            "critical": "#dc3545",
-        },
+        dict(RACK_UTILIZATION_PALETTE),
     )
 
 
