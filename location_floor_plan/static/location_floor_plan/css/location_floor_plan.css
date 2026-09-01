@@ -35,6 +35,26 @@
     margin: 0 auto;
 }
 
+.lfp-create-box h5 {
+    margin: 0 0 1.25rem;
+}
+
+.lfp-create-background {
+    margin-bottom: 1rem;
+}
+
+.lfp-create-dimensions-toggle {
+    margin: 1.25rem 0 1rem;
+}
+
+.lfp-create-dimension-fields {
+    row-gap: 0.75rem;
+}
+
+.lfp-create-submit {
+    margin-top: 0.75rem;
+}
+
 /* Rack statuses - using pattern/border/text */
 .rack-placement {
     stroke: var(--bs-border-color);
@@ -219,6 +239,10 @@
     color: var(--bs-primary);
 }
 
+.lfp-tooltip-action--color {
+    color: var(--bs-orange, var(--bs-warning));
+}
+
 .lfp-tooltip-action--danger {
     color: var(--bs-danger);
 }
@@ -229,6 +253,23 @@
     transform: translateY(-1px);
 }
 
+.lfp-tooltip-action--color:hover {
+    background: var(--bs-orange, var(--bs-warning));
+}
+
 .lfp-tooltip-action--danger:hover {
     background: var(--bs-danger);
+}
+
+#lfp-color-modal .clr-field {
+    display: block;
+    width: 100%;
+}
+
+#lfp-color-modal .clr-field input {
+    width: 100%;
+}
+
+.clr-picker {
+    z-index: 1060;
 }

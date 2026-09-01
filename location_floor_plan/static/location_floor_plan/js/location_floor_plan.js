@@ -146,6 +146,96 @@
         return layer?.options?.placementType || (locationLayerGroup?.hasLayer(layer) ? 'location' : 'rack');
     }
 
+    function defaultColorForType(type) {
+        if (!mapData || !mapData.map) return '#0d6efd';
+        return type === 'rack'
+            ? (mapData.map.default_rack_color || '#6c757d')
+            : (mapData.map.default_location_color || '#0d6efd');
+    }
+
+    function applyLayerColor(layer, color) {
+        if (!layer || !color) return;
+        layer.setStyle({ color: color, fillColor: color });
+        if (layer._path) {
+            layer._path.style.stroke = color;
+            layer._path.style.fill = color;
+        }
+    }
+
+    function setColorInputValue(inputEl, color) {
+        if (!inputEl) return;
+        inputEl.value = color;
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function inheritedColorForLayer(layer) {
+        return layer.options.targetColor || layer.options.defaultColor || layer.options.originalEffectiveColor || defaultColorForType(layer.options.placementType);
+    }
+
+    function showColorModal(layer) {
+        return new Promise(resolve => {
+            const type = getLayerPlacementType(layer);
+            const titleEl = document.getElementById('lfp-color-title');
+            const inputEl = document.getElementById('lfp-color-input');
+            const saveBtn = document.getElementById('lfp-color-save');
+            const resetBtn = document.getElementById('lfp-color-reset');
+            const modalEl = document.getElementById('lfp-color-modal');
+            const modal = typeof bootstrap !== 'undefined'
+                ? bootstrap.Modal.getOrCreateInstance(modalEl)
+                : { show: () => modalEl.dispatchEvent(new Event('shown.bs.modal')), hide: () => modalEl.dispatchEvent(new Event('hidden.bs.modal')) };
+            let resolved = false;
+
+            if (titleEl) titleEl.textContent = `Color for ${layer.options.targetName || type}`;
+            setColorInputValue(inputEl, layer.options.colorOverride || inheritedColorForLayer(layer));
+
+            const cleanup = () => {
+                if (saveBtn) saveBtn.onclick = null;
+                if (resetBtn) resetBtn.onclick = null;
+                modalEl.removeEventListener('hidden.bs.modal', onHidden);
+            };
+
+            const onHidden = () => {
+                cleanup();
+                if (!resolved) {
+                    resolved = true;
+                    resolve(null);
+                }
+            };
+
+            if (saveBtn) {
+                saveBtn.onclick = () => {
+                    const color = inputEl ? inputEl.value : null;
+                    const inherited = inheritedColorForLayer(layer);
+                    if (color && color.toLowerCase() !== inherited.toLowerCase()) {
+                        layer.options.colorOverride = color;
+                        applyLayerColor(layer, color);
+                    } else {
+                        layer.options.colorOverride = null;
+                        applyLayerColor(layer, inherited);
+                    }
+                    cleanup();
+                    if (!resolved) {
+                        resolved = true;
+                        resolve(color);
+                        modal.hide();
+                    }
+                };
+            }
+
+            if (resetBtn) {
+                resetBtn.onclick = () => {
+                    const inherited = inheritedColorForLayer(layer);
+                    setColorInputValue(inputEl, inherited);
+                    layer.options.colorOverride = null;
+                    applyLayerColor(layer, inherited);
+                };
+            }
+
+            modalEl.addEventListener('hidden.bs.modal', onHidden);
+            modal.show();
+        });
+    }
+
     function getTooltipPlacement(layer, preferredDirection = 'top') {
         if (!map || !layer || !layer.getBounds) {
             return {
@@ -359,6 +449,12 @@
             const panel = document.createElement('div');
             panel.className = 'lfp-action-panel gap-2';
             panel.appendChild(createTooltipActionButton({
+                icon: 'mdi-palette',
+                label: 'Change color',
+                className: 'lfp-tooltip-action--color',
+                onClick: () => showColorModal(selectedLayer)
+            }));
+            panel.appendChild(createTooltipActionButton({
                 icon: 'mdi-pencil',
                 label: 'Change target',
                 className: 'lfp-tooltip-action--edit',
@@ -396,10 +492,11 @@
     }
 
     // Modals
-    function showAlert(title, message) {
+    function showAlert(title, message, dismissText = 'OK') {
         return new Promise(resolve => {
             document.getElementById('lfp-alert-title').textContent = title;
             document.getElementById('lfp-alert-message').textContent = message;
+            document.getElementById('lfp-alert-dismiss').textContent = dismissText;
             const modalEl = document.getElementById('lfp-alert-modal');
             const modal = typeof bootstrap !== 'undefined' ? bootstrap.Modal.getOrCreateInstance(modalEl) : { show: () => modalEl.dispatchEvent(new Event('shown.bs.modal')), hide: () => modalEl.dispatchEvent(new Event('hidden.bs.modal')) };
             let resolved = false;
@@ -451,6 +548,113 @@
             modalEl.addEventListener('hidden.bs.modal', onHidden);
             modal.show();
         });
+    }
+
+    function showRevisionConflict() {
+        return new Promise(resolve => {
+            const modalEl = document.getElementById('lfp-conflict-modal');
+            const reloadBtn = document.getElementById('lfp-conflict-reload');
+            const modal = typeof bootstrap !== 'undefined' ? bootstrap.Modal.getOrCreateInstance(modalEl) : { show: () => modalEl.dispatchEvent(new Event('shown.bs.modal')), hide: () => modalEl.dispatchEvent(new Event('hidden.bs.modal')) };
+            let resolved = false;
+
+            const cleanup = () => {
+                modalEl.removeEventListener('hidden.bs.modal', onHidden);
+                reloadBtn.onclick = null;
+            };
+            const finish = (reload) => {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                resolve(reload);
+            };
+            const onHidden = () => finish(false);
+
+            reloadBtn.onclick = () => {
+                finish(true);
+                modal.hide();
+            };
+            modalEl.addEventListener('hidden.bs.modal', onHidden);
+            modal.show();
+        });
+    }
+
+    function getImageDimensions(file) {
+        return new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(file);
+            const image = new Image();
+            image.onload = () => {
+                URL.revokeObjectURL(url);
+                resolve({ width: image.naturalWidth, height: image.naturalHeight });
+            };
+            image.onerror = () => {
+                URL.revokeObjectURL(url);
+                reject(new Error('Could not read the selected image dimensions.'));
+            };
+            image.src = url;
+        });
+    }
+
+    function showReplaceBackgroundDialog(file, imageDimensions) {
+        return new Promise(resolve => {
+            const modalEl = document.getElementById('lfp-replace-background-modal');
+            const modal = typeof bootstrap !== 'undefined' ? bootstrap.Modal.getOrCreateInstance(modalEl) : { show: () => modalEl.dispatchEvent(new Event('shown.bs.modal')), hide: () => modalEl.dispatchEvent(new Event('hidden.bs.modal')) };
+            const customToggle = document.getElementById('lfp-replace-custom-dimensions');
+            const customFields = document.getElementById('lfp-replace-custom-dimension-fields');
+            const widthInput = document.getElementById('lfp-replace-map-width');
+            const heightInput = document.getElementById('lfp-replace-map-height');
+            const scaleToggle = document.getElementById('lfp-replace-scale-placements');
+            const confirmBtn = document.getElementById('lfp-replace-background-confirm');
+            let resolved = false;
+
+            document.getElementById('lfp-replace-current-dimensions').textContent = `${mapData.map.logical_width} × ${mapData.map.logical_height}`;
+            document.getElementById('lfp-replace-image-dimensions').textContent = `${imageDimensions.width} × ${imageDimensions.height}`;
+            customToggle.checked = false;
+            widthInput.value = mapData.map.logical_width;
+            heightInput.value = mapData.map.logical_height;
+            scaleToggle.checked = true;
+            customFields.classList.add('lfp-hidden');
+
+            const syncCustomFields = () => customFields.classList.toggle('lfp-hidden', !customToggle.checked);
+            const cleanup = () => {
+                customToggle.removeEventListener('change', syncCustomFields);
+                modalEl.removeEventListener('hidden.bs.modal', onHidden);
+                confirmBtn.onclick = null;
+            };
+            const finish = (options) => {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                resolve(options);
+            };
+            const onHidden = () => finish(null);
+
+            customToggle.addEventListener('change', syncCustomFields);
+            confirmBtn.onclick = () => {
+                const logicalWidth = Number(widthInput.value);
+                const logicalHeight = Number(heightInput.value);
+                if (customToggle.checked && (!Number.isInteger(logicalWidth) || !Number.isInteger(logicalHeight) || logicalWidth < 1 || logicalHeight < 1)) {
+                    showAlert('Invalid dimensions', 'Enter positive integer logical width and height values.');
+                    return;
+                }
+                finish({
+                    file,
+                    logicalWidth: customToggle.checked ? logicalWidth : null,
+                    logicalHeight: customToggle.checked ? logicalHeight : null,
+                    scalePlacements: scaleToggle.checked
+                });
+                modal.hide();
+            };
+            modalEl.addEventListener('hidden.bs.modal', onHidden);
+            modal.show();
+        });
+    }
+
+    async function handleRevisionConflict() {
+        if (await showRevisionConflict()) {
+            // A reload deliberately discards local edits and establishes the new revision.
+            isEditMode = false;
+            await loadMapData();
+        }
     }
 
     let select2Initialized = false;
@@ -577,11 +781,13 @@
         const toggle = document.getElementById('lfp-custom-dimensions-toggle');
         const checkbox = document.getElementById('lfp-custom-dimensions');
         const fields = document.getElementById('lfp-custom-dimensions-fields');
+        const imageDimensionsNote = document.getElementById('lfp-image-dimensions-note');
         if (!toggle || !checkbox || !fields) return;
 
-        toggle.classList.toggle('lfp-hidden', !hasBackground);
-        if (!hasBackground) checkbox.checked = true;
-        fields.classList.toggle('lfp-hidden', hasBackground && !checkbox.checked);
+        toggle.classList.remove('lfp-hidden');
+        if (!hasBackground) checkbox.checked = false;
+        fields.classList.toggle('lfp-hidden', !checkbox.checked);
+        imageDimensionsNote?.classList.toggle('lfp-hidden', !hasBackground || checkbox.checked);
     }
 
     // Main Init
@@ -594,6 +800,31 @@
             csrfToken: JSON.parse(document.getElementById('lfp-csrf-token').textContent)
         };
         config.hasEditPermission = config.permissions.addMap || config.permissions.changeMap || config.permissions.deleteMap;
+
+        if (typeof Coloris !== 'undefined') {
+            Coloris({
+                el: '#lfp-color-input',
+                format: 'hex',
+                alpha: false,
+                themeMode: 'auto',
+                swatches: [
+                    '#0d6efd',
+                    '#6610f2',
+                    '#6f42c1',
+                    '#d63384',
+                    '#dc3545',
+                    '#fd7e14',
+                    '#ffc107',
+                    '#198754',
+                    '#20c997',
+                    '#0dcaf0',
+                    '#6c757d',
+                    '#adb5bd',
+                    '#000000',
+                    '#ffffff'
+                ]
+            });
+        }
 
         document.getElementById('btn-lfp-reload')?.addEventListener('click', loadMapData);
         
@@ -833,10 +1064,12 @@
                     layer.options.placementType = 'location';
                     layer.options.pane = 'locationPane';
                     layer.options.className = 'lfp-location-poly';
+                    layer.options.originalEffectiveColor = defaultColorForType('location');
                     // Bugfix: adding to group right after create requires a timeout or removing from map first
                     map.removeLayer(layer);
                     locationLayerGroup.addLayer(layer);
                     attachEditLabel(layer, pendingPlacementData.name);
+                    applyLayerColor(layer, layer.options.originalEffectiveColor);
                     layer.on('click', (evt) => {
                         if (isEditMode) {
                             if (evt.originalEvent) L.DomEvent.stopPropagation(evt.originalEvent);
@@ -850,9 +1083,11 @@
                     layer.options.placementType = 'rack';
                     layer.options.pane = 'rackPane';
                     layer.options.className = 'rack-placement rack-usage-empty';
+                    layer.options.originalEffectiveColor = defaultColorForType('rack');
                     map.removeLayer(layer);
                     rackLayerGroup.addLayer(layer);
                     attachEditLabel(layer, pendingPlacementData.name);
+                    applyLayerColor(layer, layer.options.originalEffectiveColor);
                     layer.on('click', (evt) => {
                         if (isEditMode) {
                             if (evt.originalEvent) L.DomEvent.stopPropagation(evt.originalEvent);
@@ -884,6 +1119,10 @@
             poly.options.targetId = targetId;
             poly.options.targetName = targetName;
             poly.options.placementType = 'location';
+            poly.options.originalEffectiveColor = lp.color;
+            poly.options.colorOverride = lp.color_override || null;
+            poly.options.targetColor = lp.target_color || null;
+            poly.options.defaultColor = lp.default_color || null;
             
             if (isEditMode) {
                 attachEditLabel(poly, targetName);
@@ -905,6 +1144,7 @@
                 });
                                             }
             poly.addTo(locationLayerGroup);
+            applyLayerColor(poly, lp.color || defaultColorForType('location'));
         });
 
         mapData.rack_placements.forEach(rp => {
@@ -923,6 +1163,10 @@
             rect.options.targetName = targetName;
             rect.options.placementType = 'rack';
             rect.options.tooltipClearance = 76;
+            rect.options.originalEffectiveColor = rp.color;
+            rect.options.colorOverride = rp.color_override || null;
+            rect.options.targetColor = rp.target_color || null;
+            rect.options.defaultColor = rp.default_color || null;
             
             let subtextParts = [];
             if (rp.used_ru !== undefined && rp.total_ru !== undefined) {
@@ -966,6 +1210,7 @@
                 });
                                             }
             rect.addTo(rackLayerGroup);
+            applyLayerColor(rect, rp.color || defaultColorForType('rack'));
         });
     }
 
@@ -1004,11 +1249,32 @@
         selectLayer(null);
     }
 
-    function toggleEditMode() {
+    async function toggleEditMode() {
         if (mapData && mapData.inherited) return;
         if (!map) return;
-        enableEditModeControls();
-        drawObjects();
+        try {
+            const response = await fetch(config.apiResolvedUrl, {
+                headers: { 'Accept': 'application/json', 'X-CSRFToken': config.csrfToken }
+            });
+            if (!response.ok) throw new Error('Failed to check for map updates');
+
+            const data = await response.json();
+            const latestRevision = data.map?.revision;
+            if (!data.map?.id || String(latestRevision) !== String(originalRevision)) {
+                await showAlert(
+                    'Map updated by another user',
+                    'This map has changed since you opened the page. The latest version will now be loaded before you can edit it.',
+                    'Reload latest map'
+                );
+                await loadMapData();
+                return;
+            }
+
+            enableEditModeControls();
+            drawObjects();
+        } catch (e) {
+            showAlert('Error', 'Could not check whether the map has changed: ' + e.message);
+        }
     }
 
     function cancelEdit() {
@@ -1095,7 +1361,11 @@
         locationLayerGroup.eachLayer(layer => {
             const geom = (typeof window !== "undefined" ? window : global).LocationFloorPlanGeometry.leafletToBackend(layer, false);
             if (geom) {
-                const placement = { location: layer.options.targetId, geometry: geom };
+                const placement = {
+                    location: layer.options.targetId,
+                    geometry: geom,
+                    color: layer.options.colorOverride || null
+                };
                 if (layer.options.placementId) placement.id = layer.options.placementId;
                 newLocations.push(placement);
             }
@@ -1105,7 +1375,14 @@
         rackLayerGroup.eachLayer(layer => {
             const geom = (typeof window !== "undefined" ? window : global).LocationFloorPlanGeometry.leafletToBackend(layer, true);
             if (geom) {
-                const placement = { rack: layer.options.targetId, x: geom.x, y: geom.y, width: geom.width, height: geom.height };
+                const placement = {
+                    rack: layer.options.targetId,
+                    x: geom.x,
+                    y: geom.y,
+                    width: geom.width,
+                    height: geom.height,
+                    color: layer.options.colorOverride || null
+                };
                 newRacks.push(placement);
             }
         });
@@ -1129,7 +1406,7 @@
             });
             
             if (response.status === 409) {
-                await showAlert("Conflict", "The map has been modified by someone else. Please reload.");
+                await handleRevisionConflict();
                 return;
             }
             if (!response.ok) throw new Error(`Save failed (HTTP ${response.status})`);
@@ -1163,6 +1440,10 @@
                     })
                 });
                 
+                if (createResp.status === 409) {
+                    await handleRevisionConflict();
+                    return;
+                }
                 if (!createResp.ok) throw new Error("Failed to create map.");
                 const newMap = await createResp.json();
                 
@@ -1171,7 +1452,15 @@
                     const formData = new FormData();
                     formData.append('background', bgInput.files[0]);
                     formData.append('expected_revision', newMap.revision || 1);
-                    await fetch(mapActionUrl(newMap.id, 'background'), {method: 'PUT', headers: {'Accept': 'application/json', 'X-CSRFToken': config.csrfToken, 'If-Match': String(newMap.revision || 1)}, body: formData});
+                    formData.append('logical_width', width);
+                    formData.append('logical_height', height);
+                    formData.append('scale_placements', 'false');
+                    const backgroundResponse = await fetch(mapActionUrl(newMap.id, 'background'), {method: 'PUT', headers: {'Accept': 'application/json', 'X-CSRFToken': config.csrfToken, 'If-Match': String(newMap.revision || 1)}, body: formData});
+                    if (backgroundResponse.status === 409) {
+                        await handleRevisionConflict();
+                        return;
+                    }
+                    if (!backgroundResponse.ok) throw new Error("Failed to upload background.");
                 }
                 
                 await loadMapData();
@@ -1190,6 +1479,10 @@
         if (confirmed) {
             try {
                 const response = await fetch(mapDetailUrl(mapData.map.id), {method: 'DELETE', headers: {'Accept': 'application/json', 'X-CSRFToken': config.csrfToken, 'If-Match': String(originalRevision)}});
+                if (response.status === 409) {
+                    await handleRevisionConflict();
+                    return;
+                }
                 if (!response.ok) throw new Error("Failed to delete map");
                 
                 isEditMode = false;
@@ -1212,12 +1505,26 @@
         if (mapData && mapData.inherited) return;
         const file = event.target.files && event.target.files[0];
         if (!file || !mapData || !mapData.map) return;
+        event.target.value = '';
         const wasEditMode = isEditMode;
-        const formData = new FormData();
-        formData.append('background', file);
-        formData.append('expected_revision', originalRevision);
         try {
+            const imageDimensions = await getImageDimensions(file);
+            const options = await showReplaceBackgroundDialog(file, imageDimensions);
+            if (!options) return;
+
+            const formData = new FormData();
+            formData.append('background', options.file);
+            formData.append('expected_revision', originalRevision);
+            formData.append('scale_placements', String(options.scalePlacements));
+            if (options.logicalWidth !== null) {
+                formData.append('logical_width', String(options.logicalWidth));
+                formData.append('logical_height', String(options.logicalHeight));
+            }
             const response = await fetch(mapActionUrl(mapData.map.id, 'background'), {method: 'PUT', headers: {'Accept': 'application/json', 'X-CSRFToken': config.csrfToken, 'If-Match': String(originalRevision)}, body: formData});
+            if (response.status === 409) {
+                await handleRevisionConflict();
+                return;
+            }
             if (!response.ok) throw new Error(await response.text());
             await loadMapData(wasEditMode);
         } catch (e) {

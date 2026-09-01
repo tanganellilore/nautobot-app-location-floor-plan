@@ -2,11 +2,34 @@
 # pylint: disable=too-many-ancestors,abstract-method
 """API serializers for Location Floor Plan."""
 
+import re
+
+from django.core.validators import RegexValidator
 from nautobot.apps.api import NautobotModelSerializer
 from nautobot.dcim.models import Location, Rack
 from rest_framework import serializers
 
-from location_floor_plan.models import FloorPlan, LocationPlacement, RackPlacement
+from location_floor_plan.models import FloorPlan, LocationPlacement, LocationStyle, RackPlacement, RackStyle
+
+HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+class HexColorField(serializers.CharField):
+    """Strict 6-digit hex color field."""
+
+    default_error_messages = {"invalid": "Enter a valid hex color (e.g. #RRGGBB)."}
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("allow_null", True)
+        kwargs.setdefault("required", False)
+        super().__init__(**kwargs)
+        self.validators.append(RegexValidator(HEX_COLOR_RE, "Enter a valid hex color (e.g. #RRGGBB)."))
+
+    def to_internal_value(self, data):
+        """Accept null without running the hex validator."""
+        if data is None and self.allow_null:
+            return None
+        return super().to_internal_value(data)
 
 
 class FloorPlanSerializer(NautobotModelSerializer):
@@ -42,7 +65,7 @@ class LocationPlacementSerializer(NautobotModelSerializer):
         model = LocationPlacement
         # Keep explicit fields to avoid exposing unintended model/API fields.
         # pylint: disable-next=nb-use-fields-all
-        fields = ["id", "url", "display", "floor_plan", "location", "geometry", "expected_revision"]
+        fields = ["id", "url", "display", "floor_plan", "location", "geometry", "color", "expected_revision"]
         read_only_fields = ["id", "url", "display"]
 
 
@@ -62,7 +85,19 @@ class RackPlacementSerializer(NautobotModelSerializer):
         model = RackPlacement
         # Keep explicit fields to avoid exposing unintended model/API fields.
         # pylint: disable-next=nb-use-fields-all
-        fields = ["id", "url", "display", "floor_plan", "rack", "x", "y", "width", "height", "expected_revision"]
+        fields = [
+            "id",
+            "url",
+            "display",
+            "floor_plan",
+            "rack",
+            "x",
+            "y",
+            "width",
+            "height",
+            "color",
+            "expected_revision",
+        ]
         read_only_fields = ["id", "url", "display"]
 
 
@@ -90,6 +125,7 @@ class LocationPlacementSnapshotWriteSerializer(serializers.Serializer):
 
     location = serializers.PrimaryKeyRelatedField(queryset=Location.objects.all())
     geometry = serializers.JSONField()
+    color = HexColorField()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -106,6 +142,7 @@ class RackPlacementSnapshotWriteSerializer(serializers.Serializer):
     y = serializers.IntegerField(min_value=0)
     width = serializers.IntegerField(min_value=1)
     height = serializers.IntegerField(min_value=1)
+    color = HexColorField()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -121,3 +158,33 @@ class SnapshotWriteSerializer(serializers.Serializer):
     location_placements = LocationPlacementSnapshotWriteSerializer(many=True)
     rack_placements = RackPlacementSnapshotWriteSerializer(many=True)
     delete_stale_ids = serializers.ListField(child=serializers.UUIDField(), required=False)
+
+
+class LocationStyleSerializer(serializers.ModelSerializer):
+    """Serializer for persistent Location style."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if request is not None:
+            self.fields["location"].queryset = Location.objects.restrict(request.user, "view")
+
+    class Meta:
+        model = LocationStyle
+        # pylint: disable-next=nb-use-fields-all
+        fields = ["id", "location", "color"]
+
+
+class RackStyleSerializer(serializers.ModelSerializer):
+    """Serializer for persistent Rack style."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if request is not None:
+            self.fields["rack"].queryset = Rack.objects.restrict(request.user, "view")
+
+    class Meta:
+        model = RackStyle
+        # pylint: disable-next=nb-use-fields-all
+        fields = ["id", "rack", "color"]
