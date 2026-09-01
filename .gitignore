@@ -138,6 +138,9 @@ dmypy.json
 # Editor
 .vscode/
 
+# Local deepwork state
+.slim/deepwork/
+
 ### macOS ###
 # General
 .DS_Store

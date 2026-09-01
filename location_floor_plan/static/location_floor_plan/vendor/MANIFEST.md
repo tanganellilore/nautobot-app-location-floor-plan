@@ -8,3 +8,7 @@
   - Version: 2.20.0
   - License: MIT
   - Source: npm install @geoman-io/leaflet-geoman-free@2.20.0
+- Coloris
+  - Version: 0.25.0
+  - License: MIT
+  - Source: https://github.com/mdbassit/Coloris/releases/tag/v0.25.0

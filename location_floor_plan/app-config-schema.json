@@ -6,7 +6,17 @@
     "rack_utilization_high_threshold": {"type": "integer", "minimum": 1, "maximum": 100},
     "background_max_bytes": {"type": "integer", "minimum": 1024},
     "background_max_pixels": {"type": "integer", "minimum": 1},
-    "background_max_dimension": {"type": "integer", "minimum": 1}
+    "background_max_dimension": {"type": "integer", "minimum": 1},
+    "location_default_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+    "rack_default_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+    "rack_utilization_color_enabled": {"type": "boolean"},
+    "rack_utilization_palette": {
+      "type": "object",
+      "patternProperties": {
+        "^(empty|low|medium|high|critical)$": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": true
 }

@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import close_old_connections
+from django.db import connections
 from django.test import TestCase, TransactionTestCase
 from nautobot.dcim.factory import LocationFactory, LocationTypeFactory, RackFactory
 from nautobot.dcim.models import Location, Rack
@@ -343,7 +343,7 @@ class Phase2ConcurrencyTestCase(TransactionTestCase):
         results = []
 
         def worker(width):
-            close_old_connections()
+            connections.close_all()
             try:
                 barrier.wait(timeout=10)
                 update_floor_plan(user=user, floor_plan=floor_plan, expected_revision=1, logical_width=width)
@@ -351,13 +351,14 @@ class Phase2ConcurrencyTestCase(TransactionTestCase):
             except RevisionConflict:
                 results.append("conflict")
             finally:
-                close_old_connections()
+                connections.close_all()
 
         threads = [threading.Thread(target=worker, args=(200,)), threading.Thread(target=worker, args=(300,))]
         for thread in threads:
             thread.start()
         for thread in threads:
             thread.join(timeout=20)
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
         self.assertCountEqual(results, ["ok", "conflict"])
         floor_plan.refresh_from_db()
         self.assertEqual(floor_plan.revision, 2)
