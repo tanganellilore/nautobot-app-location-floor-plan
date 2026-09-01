@@ -134,6 +134,11 @@ def _rack_utilization_palette():
     )
 
 
+def _optional_color(value):
+    """Store absent optional color values as an empty string."""
+    return "" if value is None else value
+
+
 def _effective_location_color(placement, *, style_map):
     if placement.color:
         return placement.color
@@ -349,14 +354,14 @@ def replace_snapshot(
             _check(user, "location_floor_plan.change_locationplacement", obj)
             obj.geometry = item["geometry"]
             if "color" in item:
-                obj.color = item["color"]
+                obj.color = _optional_color(item["color"])
         else:
             _check(user, "location_floor_plan.add_locationplacement")
             obj = LocationPlacement(
                 floor_plan=parent,
                 location=item["location"],
                 geometry=item["geometry"],
-                color=item.get("color"),
+                color=_optional_color(item.get("color")),
             )
         obj.full_clean()
         obj.save()
@@ -371,10 +376,10 @@ def replace_snapshot(
             for key, value in fields.items():
                 setattr(obj, key, value)
             if "color" in item:
-                obj.color = item["color"]
+                obj.color = _optional_color(item["color"])
         else:
             _check(user, "location_floor_plan.add_rackplacement")
-            obj = RackPlacement(floor_plan=parent, rack=item["rack"], color=item.get("color"), **fields)
+            obj = RackPlacement(floor_plan=parent, rack=item["rack"], color=_optional_color(item.get("color")), **fields)
         obj.full_clean()
         obj.save()
         _assert_restricted(user, "change" if rack_id in existing_racks else "add", obj)
@@ -390,6 +395,8 @@ def mutate_placement(
 ):  # pylint: disable=too-many-arguments
     """Create, update, or delete one placement on exactly one locked map."""
     perm_base = placement_model._meta.model_name
+    if "color" in data:
+        data["color"] = _optional_color(data["color"])
     if action == "create":
         parent = FloorPlan.objects.select_for_update().get(pk=floor_plan.pk)
         _check(user, "location_floor_plan.change_floorplan", parent)
@@ -691,16 +698,37 @@ def _scale_rack_placement(x, y, width, height, old_width, old_height, new_width,
 
 
 @transaction.atomic
-def replace_background(*, user, floor_plan, expected_revision, upload):
-    """Replace the background image and rescale existing placements to the new dimensions."""
+def replace_background(
+    *, user, floor_plan, expected_revision, upload, logical_width=None, logical_height=None, scale_placements=True
+):  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements
+    """Replace the background image and optionally rescale placements to new dimensions."""
     parent = FloorPlan.objects.select_for_update().get(pk=floor_plan.pk)
     _check(user, "location_floor_plan.change_floorplan", parent)
     _assert_revision(parent, expected_revision)
 
     png = normalize_background_upload(upload)
     with Image.open(BytesIO(png)) as image:
-        new_width = image.width
-        new_height = image.height
+        image_width = image.width
+        image_height = image.height
+
+    if (logical_width is None) != (logical_height is None):
+        raise ValidationError("logical_width and logical_height must be provided together.")
+    if logical_width is None:
+        new_width, new_height = image_width, image_height
+    else:
+        try:
+            new_width, new_height = int(logical_width), int(logical_height)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError("Logical dimensions must be integers.") from exc
+    if not 1 <= new_width <= 1_000_000 or not 1 <= new_height <= 1_000_000:
+        raise ValidationError("Logical dimensions must be between 1 and 1000000.")
+
+    if isinstance(scale_placements, str):
+        if scale_placements.lower() not in {"true", "false", "1", "0"}:
+            raise ValidationError("scale_placements must be a boolean.")
+        scale_placements = scale_placements.lower() in {"true", "1"}
+    elif not isinstance(scale_placements, bool):
+        raise ValidationError("scale_placements must be a boolean.")
 
     old_width = parent.logical_width
     old_height = parent.logical_height
@@ -710,19 +738,20 @@ def replace_background(*, user, floor_plan, expected_revision, upload):
     location_placements = list(parent.location_placements.select_related("location").select_for_update())
     rack_placements = list(parent.rack_placements.select_related("rack", "rack__location").select_for_update())
 
-    for placement in location_placements:
-        placement.geometry = _scale_geometry(placement.geometry, old_width, old_height, new_width, new_height)
-    for placement in rack_placements:
-        placement.x, placement.y, placement.width, placement.height = _scale_rack_placement(
-            placement.x,
-            placement.y,
-            placement.width,
-            placement.height,
-            old_width,
-            old_height,
-            new_width,
-            new_height,
-        )
+    if scale_placements and (old_width != new_width or old_height != new_height):
+        for placement in location_placements:
+            placement.geometry = _scale_geometry(placement.geometry, old_width, old_height, new_width, new_height)
+        for placement in rack_placements:
+            placement.x, placement.y, placement.width, placement.height = _scale_rack_placement(
+                placement.x,
+                placement.y,
+                placement.width,
+                placement.height,
+                old_width,
+                old_height,
+                new_width,
+                new_height,
+            )
 
     parent.full_clean()
     for placement in location_placements:
