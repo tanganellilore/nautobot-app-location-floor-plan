@@ -492,10 +492,11 @@
     }
 
     // Modals
-    function showAlert(title, message) {
+    function showAlert(title, message, dismissText = 'OK') {
         return new Promise(resolve => {
             document.getElementById('lfp-alert-title').textContent = title;
             document.getElementById('lfp-alert-message').textContent = message;
+            document.getElementById('lfp-alert-dismiss').textContent = dismissText;
             const modalEl = document.getElementById('lfp-alert-modal');
             const modal = typeof bootstrap !== 'undefined' ? bootstrap.Modal.getOrCreateInstance(modalEl) : { show: () => modalEl.dispatchEvent(new Event('shown.bs.modal')), hide: () => modalEl.dispatchEvent(new Event('hidden.bs.modal')) };
             let resolved = false;
@@ -544,6 +545,34 @@
                 }
             };
             
+            modalEl.addEventListener('hidden.bs.modal', onHidden);
+            modal.show();
+        });
+    }
+
+    function showRevisionConflict() {
+        return new Promise(resolve => {
+            const modalEl = document.getElementById('lfp-conflict-modal');
+            const reloadBtn = document.getElementById('lfp-conflict-reload');
+            const modal = typeof bootstrap !== 'undefined' ? bootstrap.Modal.getOrCreateInstance(modalEl) : { show: () => modalEl.dispatchEvent(new Event('shown.bs.modal')), hide: () => modalEl.dispatchEvent(new Event('hidden.bs.modal')) };
+            let resolved = false;
+
+            const cleanup = () => {
+                modalEl.removeEventListener('hidden.bs.modal', onHidden);
+                reloadBtn.onclick = null;
+            };
+            const finish = (reload) => {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                resolve(reload);
+            };
+            const onHidden = () => finish(false);
+
+            reloadBtn.onclick = () => {
+                finish(true);
+                modal.hide();
+            };
             modalEl.addEventListener('hidden.bs.modal', onHidden);
             modal.show();
         });
@@ -618,6 +647,14 @@
             modalEl.addEventListener('hidden.bs.modal', onHidden);
             modal.show();
         });
+    }
+
+    async function handleRevisionConflict() {
+        if (await showRevisionConflict()) {
+            // A reload deliberately discards local edits and establishes the new revision.
+            isEditMode = false;
+            await loadMapData();
+        }
     }
 
     let select2Initialized = false;
@@ -1212,11 +1249,32 @@
         selectLayer(null);
     }
 
-    function toggleEditMode() {
+    async function toggleEditMode() {
         if (mapData && mapData.inherited) return;
         if (!map) return;
-        enableEditModeControls();
-        drawObjects();
+        try {
+            const response = await fetch(config.apiResolvedUrl, {
+                headers: { 'Accept': 'application/json', 'X-CSRFToken': config.csrfToken }
+            });
+            if (!response.ok) throw new Error('Failed to check for map updates');
+
+            const data = await response.json();
+            const latestRevision = data.map?.revision;
+            if (!data.map?.id || String(latestRevision) !== String(originalRevision)) {
+                await showAlert(
+                    'Map updated by another user',
+                    'This map has changed since you opened the page. The latest version will now be loaded before you can edit it.',
+                    'Reload latest map'
+                );
+                await loadMapData();
+                return;
+            }
+
+            enableEditModeControls();
+            drawObjects();
+        } catch (e) {
+            showAlert('Error', 'Could not check whether the map has changed: ' + e.message);
+        }
     }
 
     function cancelEdit() {
@@ -1343,7 +1401,7 @@
             });
             
             if (response.status === 409) {
-                await showAlert("Conflict", "The map has been modified by someone else. Please reload.");
+                await handleRevisionConflict();
                 return;
             }
             if (!response.ok) throw new Error(`Save failed (HTTP ${response.status})`);
@@ -1377,6 +1435,10 @@
                     })
                 });
                 
+                if (createResp.status === 409) {
+                    await handleRevisionConflict();
+                    return;
+                }
                 if (!createResp.ok) throw new Error("Failed to create map.");
                 const newMap = await createResp.json();
                 
@@ -1389,6 +1451,10 @@
                     formData.append('logical_height', height);
                     formData.append('scale_placements', 'false');
                     const backgroundResponse = await fetch(mapActionUrl(newMap.id, 'background'), {method: 'PUT', headers: {'Accept': 'application/json', 'X-CSRFToken': config.csrfToken, 'If-Match': String(newMap.revision || 1)}, body: formData});
+                    if (backgroundResponse.status === 409) {
+                        await handleRevisionConflict();
+                        return;
+                    }
                     if (!backgroundResponse.ok) throw new Error("Failed to upload background.");
                 }
                 
@@ -1408,6 +1474,10 @@
         if (confirmed) {
             try {
                 const response = await fetch(mapDetailUrl(mapData.map.id), {method: 'DELETE', headers: {'Accept': 'application/json', 'X-CSRFToken': config.csrfToken, 'If-Match': String(originalRevision)}});
+                if (response.status === 409) {
+                    await handleRevisionConflict();
+                    return;
+                }
                 if (!response.ok) throw new Error("Failed to delete map");
                 
                 isEditMode = false;
@@ -1446,6 +1516,10 @@
                 formData.append('logical_height', String(options.logicalHeight));
             }
             const response = await fetch(mapActionUrl(mapData.map.id, 'background'), {method: 'PUT', headers: {'Accept': 'application/json', 'X-CSRFToken': config.csrfToken, 'If-Match': String(originalRevision)}, body: formData});
+            if (response.status === 409) {
+                await handleRevisionConflict();
+                return;
+            }
             if (!response.ok) throw new Error(await response.text());
             await loadMapData(wasEditMode);
         } catch (e) {
