@@ -379,7 +379,9 @@ def replace_snapshot(
                 obj.color = _optional_color(item["color"])
         else:
             _check(user, "location_floor_plan.add_rackplacement")
-            obj = RackPlacement(floor_plan=parent, rack=item["rack"], color=_optional_color(item.get("color")), **fields)
+            obj = RackPlacement(
+                floor_plan=parent, rack=item["rack"], color=_optional_color(item.get("color")), **fields
+            )
         obj.full_clean()
         obj.save()
         _assert_restricted(user, "change" if rack_id in existing_racks else "add", obj)
